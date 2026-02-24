@@ -30,7 +30,7 @@ def format_tag_ids(tag_ids: Iterable[int], include_raw: bool = True) -> str:
 
 
 def format_tags_for_table(tag_ids: Iterable[int]) -> str:
-    """CDS525 Table-1 style formatter."""
+    """DL Table-1 style formatter."""
     return format_tag_ids(tag_ids, include_raw=True)
 
 

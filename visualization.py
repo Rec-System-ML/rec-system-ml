@@ -51,7 +51,7 @@ def plot_model_comparison(
     return fig
 
 
-def plot_cds525_training_panel(
+def plot_dl_training_panel(
     history: pd.DataFrame,
     epoch_col: str = "epoch",
     train_loss_col: str = "train_loss",
@@ -60,7 +60,7 @@ def plot_cds525_training_panel(
     title: str = "Training Loss/Accuracy vs Epoch",
 ):
     """
-    CDS525-style figure with one loss curve and two accuracy curves.
+    DL-style figure with one loss curve and two accuracy curves.
     Left y-axis: loss, right y-axis: accuracies.
     """
     fig, ax_loss = plt.subplots(figsize=(9, 5))

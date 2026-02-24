@@ -206,7 +206,7 @@ def evaluate_model(
     extra_metrics: Optional[Dict[str, float]] = None,
 ) -> Dict[str, float]:
     """
-    Simple helper used by CDS525 training scripts.
+    Simple helper used by DL project training scripts.
 
     Returns classification metrics and merges user-provided extra metrics.
     """
