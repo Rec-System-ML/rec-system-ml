@@ -1,6 +1,5 @@
 # recsys-shared
 
-Shared utilities for both `cds524-ml-project` and `cds525-dl-project`.
 
 ## What this repo contains
 
@@ -32,7 +31,4 @@ train, val, test, encoders, tag_mlb, tag_matrix = preprocess_kuairand(
 reranker = TimeDecayReranker(gamma=0.7, beta=1.0)
 ```
 
-## Notes
 
-- This repository should be maintained once and reused via git submodule in both course projects.
-- Keep interfaces stable to reduce integration overhead for both teams.
