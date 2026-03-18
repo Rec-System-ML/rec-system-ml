@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Interest Evolution · VENUS</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="interest_evolution_data.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: #020b18;
+  color: #e0f0ff;
+  font-family: 'Courier New', monospace;
+  overflow: hidden;
+  width: 100vw; height: 100vh;
+}
+#bg-grid {
+  position:fixed; inset:0;
+  background-image:
+    linear-gradient(rgba(0,200,180,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,200,180,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+#particles   { position:fixed; inset:0; pointer-events:none; z-index:0; }
+#mainSvg     { position:fixed; inset:0; width:100vw; height:100vh; z-index:1; }
+#flow-canvas { position:fixed; inset:0; pointer-events:none; z-index:2; }
+#ui          { position:fixed; inset:0; pointer-events:none; z-index:3; }
+
+/* ── 节点环动画 ── */
+@keyframes ring-active   { 0%{opacity:.55;} 100%{opacity:0; transform:scale(2.2);} }
+@keyframes ring-mutation { 0%{opacity:.75;} 100%{opacity:0; transform:scale(2.4);} }
+@keyframes ring-predict  { 0%{opacity:.35;} 100%{opacity:0; transform:scale(2.0);} }
+@keyframes node-mut-flash{ 0%,100%{opacity:1;} 50%{opacity:.65;} }
+@keyframes node-pred     { 0%,100%{opacity:.38;} 50%{opacity:.65;} }
+@keyframes scan          { from{transform:translateY(-100%);} to{transform:translateY(100vh);} }
+@keyframes burst         { 0%{r:0;opacity:.8;} 100%{r:120px;opacity:0;} }
+@keyframes fadeIn        { from{opacity:0;} to{opacity:1;} }
+
+.scan-line {
+  position:absolute; left:0; right:0; height:2px;
+  background:linear-gradient(90deg,transparent,rgba(0,229,176,.12),transparent);
+  animation: scan 7s linear infinite;
+  pointer-events:none;
+}
+
+/* ── 面板通用 ── */
+.panel {
+  background: rgba(2,11,24,.88);
+  border: 1px solid rgba(0,200,180,.28);
+  backdrop-filter: blur(8px);
+  font-size: 11px; letter-spacing:.4px; line-height:1.85;
+}
+.p-title { color:#00e5b0; font-weight:bold; letter-spacing:1px; }
+.p-muted { color:#556a7a; }
+.p-val   { color:#e0f0ff; font-weight:bold; }
+.p-red   { color:#ff3355; }
+.p-purple{ color:#9977ff; }
+
+/* 右上状态（含演化概率，合并为一块） */
+.panel-status {
+  position:absolute; top:18px; right:18px;
+  padding:10px 16px;
+  pointer-events:auto;
+}
+/* 演化概率：紧接在 status 面板内，不再单独定位 */
+.panel-evo {
+  display:none;
+}
+/* 右下数据 */
+.panel-data {
+  position:absolute; bottom:110px; right:18px;
+  padding:11px 16px;
+}
+/* 相位标签 */
+.panel-phase {
+  position:absolute; top:18px; left:50%; transform:translateX(-50%);
+  padding:8px 20px; min-width:260px; text-align:center;
+  border-radius:2px;
+}
+.phase-name { font-size:13px; font-weight:bold; color:#00e5b0; letter-spacing:1.5px; }
+.phase-date { font-size:10px; color:#556a7a; margin-top:2px; }
+
+/* 左上 */
+.panel-top-left {
+  position:absolute; top:18px; left:18px;
+  display:flex; flex-direction:column; gap:8px;
+  pointer-events:auto;
+}
+.back-btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:5px 12px; border-radius:4px;
+  background:rgba(0,200,180,.08);
+  border:1px solid rgba(0,200,180,.25);
+  color:#00e5b0; font-size:11px; cursor:pointer;
+  text-decoration:none; transition:background .2s;
+}
+.back-btn:hover { background:rgba(0,200,180,.18); }
+
+/* 突变警告横幅 */
+.mutation-banner {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:rgba(255,51,85,.12); border:1px solid rgba(255,51,85,.5);
+  padding:12px 28px; font-size:14px; font-weight:bold;
+  letter-spacing:2px; color:#ff3355; text-align:center;
+  pointer-events:none; opacity:0; transition:opacity .4s;
+}
+
+/* ── 时间轴 ── */
+.timeline-wrap {
+  position:absolute; bottom:0; left:0; right:0;
+  height:110px;
+  background:linear-gradient(to top, rgba(2,11,24,.97), transparent);
+  padding:0 28px 16px;
+  display:flex; flex-direction:column; justify-content:flex-end;
+  pointer-events:auto;
+}
+/* 突变菱形标记 */
+.tl-mut-row { position:relative; height:18px; margin-bottom:2px; }
+.tl-mut-diamond {
+  position:absolute; width:8px; height:8px;
+  background:#ff3355; transform:translateX(-50%) rotate(45deg);
+  box-shadow:0 0 6px #ff3355,0 0 14px rgba(255,51,85,.5);
+  animation: mut-dia 1.6s ease-in-out infinite;
+  cursor:pointer; pointer-events:auto;
+}
+@keyframes mut-dia {
+  0%,100%{opacity:1;box-shadow:0 0 6px #ff3355,0 0 14px rgba(255,51,85,.5);}
+  50%{opacity:.5;box-shadow:0 0 10px #ff3355,0 0 22px rgba(255,51,85,.7);}
+}
+.tl-mut-tag {
+  position:absolute; top:-1px;
+  font-size:8px; color:#ff3355; letter-spacing:.8px;
+  transform:translateX(calc(-50% + 8px));
+  white-space:nowrap; pointer-events:none;
+}
+.tl-labels {
+  display:flex; justify-content:space-between;
+  font-size:10px; color:#334455; letter-spacing:1px; margin-bottom:8px;
+}
+.tl-track-wrap { position:relative; height:20px; display:flex; align-items:center; }
+.tl-track {
+  width:100%; height:4px; border-radius:2px;
+  background:linear-gradient(90deg,#1a3a6a,#0099cc,#00e5b0,#aa66ff,#ff66aa);
+}
+.tl-markers {
+  position:absolute; top:0; left:0; right:0; height:100%;
+  display:flex; align-items:center; pointer-events:none;
+}
+.tl-marker {
+  position:absolute; width:10px; height:10px; border-radius:50%;
+  transform:translateX(-50%); cursor:pointer; pointer-events:auto;
+  transition:all .2s; border:2px solid;
+}
+.tl-marker:hover { transform:translateX(-50%) scale(1.4); }
+input#tlSlider {
+  position:absolute; inset:0; width:100%; height:100%;
+  opacity:0; cursor:pointer; margin:0; z-index:10;
+}
+.tl-thumb {
+  position:absolute; top:50%; transform:translate(-50%,-50%);
+  width:16px; height:16px; border-radius:50%;
+  background:#00e5b0; pointer-events:none;
+  box-shadow:0 0 10px #00e5b0,0 0 20px rgba(0,229,176,.4);
+  transition:left .4s cubic-bezier(.4,0,.2,1);
+}
+.tl-thumb-lbl {
+  position:absolute; top:-26px; transform:translateX(-50%);
+  background:rgba(0,229,176,.15); border:1px solid rgba(0,229,176,.5);
+  padding:2px 8px; font-size:10px; color:#00e5b0;
+  white-space:nowrap; pointer-events:none;
+}
+.tl-dates {
+  display:flex; justify-content:space-between;
+  font-size:10px; color:#223344; margin-top:8px;
+}
+
+/* 播放按钮 */
+.play-btn {
+  position:absolute; bottom:108px; left:18px;
+  background:rgba(0,200,180,.08); border:1px solid rgba(0,200,180,.3);
+  color:#00e5b0; font-size:11px; padding:6px 14px;
+  cursor:pointer; letter-spacing:1px;
+  display:flex; align-items:center; gap:6px;
+  pointer-events:auto; transition:background .2s;
+}
+.play-btn:hover { background:rgba(0,200,180,.18); }
+
+/* tooltip */
+.tooltip {
+  position:absolute; display:none;
+  background:rgba(2,11,24,.92); border:1px solid rgba(0,200,180,.3);
+  padding:8px 12px; font-size:11px; line-height:1.8;
+  pointer-events:none; backdrop-filter:blur(6px);
+}
+.tooltip.show { display:block; animation:fadeIn .15s; }
+.tt-name { font-weight:bold; letter-spacing:.5px; }
+
+::-webkit-scrollbar { display:none; }
+</style>
+</head>
+<body>
+<div id="bg-grid"></div>
+<canvas id="particles"></canvas>
+<svg id="mainSvg"></svg>
+<canvas id="flow-canvas"></canvas>
+
+<div id="ui">
+  <div class="scan-line"></div>
+
+  <!-- 左上 -->
+  <div class="panel-top-left">
+    <a class="back-btn" href="index.html">← VENUS DASHBOARD</a>
+  </div>
+
+  <!-- 相位标签 -->
+  <div class="panel panel-phase" id="phasePanel">
+    <div class="phase-name" id="phaseName">COLD START</div>
+    <div class="phase-date" id="phaseDate">2022-04-08 · Interest Graph Init</div>
+  </div>
+
+  <!-- 右上状态 -->
+  <div class="panel panel-status">
+    <div class="p-title">USER INTEREST EVOLUTION</div>
+    <div class="p-title" style="margin-bottom:5px">TIME DECAY &amp; MUTATION DETECTION</div>
+    <div><span class="p-muted">STATUS: </span><span class="p-val" id="statusTxt">REPLAY</span></div>
+    <div><span class="p-muted">λ DECAY: </span><span class="p-val">0.10 / day</span></div>
+    <div><span class="p-muted">EVO PROB: </span><span class="p-val" id="evoPct">—</span></div>
+    <div><span class="p-muted">USER: </span>
+      <select id="userSel" style="background:transparent;border:none;color:#00e5b0;font-family:inherit;font-size:11px;cursor:pointer;outline:none;" onchange="switchUser(+this.value)">
+        <option value="0">#970 · full_active</option>
+        <option value="1">#999 · high_active</option>
+        <option value="2">#546 · mutation_active</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 演化概率（已合并进上方面板，保留空div避免js报错） -->
+  <div class="panel panel-evo" style="display:none">
+    <span id="evoPct_unused"></span>
+  </div>
+
+  <!-- 右下数据 -->
+  <div class="panel panel-data">
+    <div><span class="p-muted">ACTIVE NODES </span><span class="p-val" id="d-active" style="float:right;margin-left:20px">0</span></div>
+    <div><span class="p-muted">PREDICTED    </span><span class="p-purple p-val" id="d-pred" style="float:right;margin-left:20px">0</span></div>
+    <div><span class="p-muted">MUTATION     </span><span id="d-mut"  style="float:right;margin-left:20px">—</span></div>
+    <div><span class="p-muted">TRANSITIONS  </span><span class="p-val" id="d-links" style="float:right;margin-left:20px">0</span></div>
+  </div>
+
+  <!-- 突变警告横幅 -->
+  <div class="mutation-banner" id="mutBanner">
+    ⚠  ANOMALOUS MUTATION DETECTED  ⚠
+  </div>
+
+  <!-- 播放按钮 -->
+  <button class="play-btn" id="playBtn" onclick="togglePlay()">▶ AUTO PLAY</button>
+
+  <!-- 时间轴 -->
+  <div class="timeline-wrap">
+    <div class="tl-labels">
+      <span>PAST</span><span>PRESENT</span><span>FUTURE PREDICTION →</span>
+    </div>
+    <div class="tl-mut-row" id="tlMutRow"></div>
+    <div class="tl-track-wrap">
+      <div class="tl-track"></div>
+      <div class="tl-markers" id="tlMarkers"></div>
+      <div class="tl-thumb" id="tlThumb">
+        <div class="tl-thumb-lbl" id="tlLbl">2022-04-08</div>
+      </div>
+      <input type="range" id="tlSlider" min="0" max="5" step="1" value="0" oninput="onSlider(+this.value)">
+    </div>
+    <div class="tl-dates" id="tlDates"></div>
+  </div>
+
+  <!-- Tooltip -->
+  <div class="tooltip" id="tooltip">
+    <div class="tt-name" id="tt-name"></div>
+    <div><span class="p-muted">STATE: </span><span id="tt-state"></span></div>
+    <div id="tt-stats"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  粒子背景
+// ══════════════════════════════════════════
+const cvs = document.getElementById('particles')
+const pc  = cvs.getContext('2d')
+let PW, PH, pts = []
+function resizePts() {
+  PW = cvs.width = window.innerWidth
+  PH = cvs.height = window.innerHeight
+}
+resizePts()
+function initPts() {
+  pts = Array.from({length:70}, () => ({
+    x: Math.random()*PW, y: Math.random()*PH,
+    r: Math.random()*1.4+.3,
+    vx:(Math.random()-.5)*.18, vy:(Math.random()-.5)*.18,
+    a: Math.random()*.4+.08
+  }))
+}
+initPts()
+function tickPts() {
+  pc.clearRect(0,0,PW,PH)
+  pts.forEach(p=>{
+    p.x+=p.vx; p.y+=p.vy
+    if(p.x<0)p.x=PW; if(p.x>PW)p.x=0
+    if(p.y<0)p.y=PH; if(p.y>PH)p.y=0
+    pc.beginPath(); pc.arc(p.x,p.y,p.r,0,Math.PI*2)
+    pc.fillStyle=`rgba(0,220,180,${p.a})`; pc.fill()
+  })
+  requestAnimationFrame(tickPts)
+}
+tickPts()
+window.addEventListener('resize', ()=>{ resizePts(); initPts() })
+
+// ══════════════════════════════════════════
+//  粒子流动（沿 Markov 转移边流动）
+// ══════════════════════════════════════════
+const flowCvs = document.getElementById('flow-canvas')
+const flowCtx = flowCvs.getContext('2d')
+let flowParticles = []
+
+function resizeFlow() {
+  flowCvs.width  = window.innerWidth
+  flowCvs.height = window.innerHeight
+}
+resizeFlow()
+window.addEventListener('resize', resizeFlow)
+
+// 根据当前快照可见边集合刷新粒子池
+function spawnFlowParticles(visibleLinkKeys, mutNodeIds) {
+  // 移除不再可见的边上的粒子
+  flowParticles = flowParticles.filter(p => visibleLinkKeys.has(p.key))
+
+  allLinks.forEach(lnk => {
+    const sid = lnk.source.id ?? lnk.source
+    const tid = lnk.target.id ?? lnk.target
+    const key = sid + '||' + tid
+    if (!visibleLinkKeys.has(key)) return
+
+    const isMut = mutNodeIds.has(sid) || mutNodeIds.has(tid)
+    const prob  = lnk.prob ?? 0.2
+    const want  = Math.max(1, Math.round(prob * 6))  // 1–6 颗/边
+    const have  = flowParticles.filter(p => p.key === key).length
+
+    for (let i = have; i < want; i++) {
+      flowParticles.push({
+        key, lnk,
+        t:     Math.random(),
+        speed: 0.0025 + prob * 0.005,
+        size:  1.5 + prob * 2.5,
+        alpha: 0.45 + prob * 0.4,
+        isMut,
+      })
+    }
+  })
+}
+
+function tickFlow() {
+  flowCtx.clearRect(0, 0, flowCvs.width, flowCvs.height)
+
+  flowParticles.forEach(p => {
+    p.t += p.speed
+    if (p.t > 1) p.t -= 1
+
+    const src = p.lnk.source
+    const tgt = p.lnk.target
+    if (!src || !tgt || src.x == null || isNaN(src.x)) return
+
+    const x = src.x + (tgt.x - src.x) * p.t
+    const y = src.y + (tgt.y - src.y) * p.t
+
+    // 尾迹（拖影）
+    const tx = src.x + (tgt.x - src.x) * Math.max(0, p.t - 0.06)
+    const ty = src.y + (tgt.y - src.y) * Math.max(0, p.t - 0.06)
+    const grad = flowCtx.createLinearGradient(tx, ty, x, y)
+    const col  = p.isMut ? '255,51,85' : '0,229,160'
+    grad.addColorStop(0, `rgba(${col},0)`)
+    grad.addColorStop(1, `rgba(${col},${p.alpha})`)
+    flowCtx.beginPath()
+    flowCtx.moveTo(tx, ty)
+    flowCtx.lineTo(x, y)
+    flowCtx.strokeStyle = grad
+    flowCtx.lineWidth   = p.size * 0.8
+    flowCtx.stroke()
+
+    // 粒子头部发光点
+    flowCtx.beginPath()
+    flowCtx.arc(x, y, p.size, 0, Math.PI * 2)
+    flowCtx.fillStyle   = `rgba(${col},${p.alpha})`
+    flowCtx.shadowColor = p.isMut ? '#ff3355' : '#00e5a0'
+    flowCtx.shadowBlur  = 10
+    flowCtx.fill()
+    flowCtx.shadowBlur  = 0
+  })
+
+  requestAnimationFrame(tickFlow)
+}
+tickFlow()
+
+// ══════════════════════════════════════════
+//  颜色
+// ══════════════════════════════════════════
+const COLOR = {active:'#00e5a0', mutation:'#ff3355', predicted:'#8866ff'}
+
+// ══════════════════════════════════════════
+//  D3 全局
+// ══════════════════════════════════════════
+const svg   = d3.select('#mainSvg')
+let sim     = null
+let allNodes = []
+let allLinks = []
+let nodeG, linkG
+let curUser = 0
+let curSnap = 0
+let playing = false
+let playTimer = null
+
+// ══════════════════════════════════════════
+//  时间轴初始化
+// ══════════════════════════════════════════
+function buildTimeline(snapshots) {
+  const marks  = document.getElementById('tlMarkers')
+  const dates  = document.getElementById('tlDates')
+  const mutRow = document.getElementById('tlMutRow')
+  marks.innerHTML = ''
+  dates.innerHTML = ''
+  mutRow.innerHTML = ''
+
+  // 突变菱形标记
+  snapshots.forEach((s, i) => {
+    if (!s.mutation) return
+    const pct = (i / (snapshots.length - 1)) * 100
+    const dia = document.createElement('div')
+    dia.className = 'tl-mut-diamond'
+    dia.style.left = pct + '%'
+    dia.title = `MUTATION · ${s.date}`
+    dia.onclick = () => { document.getElementById('tlSlider').value = i; onSlider(i) }
+    mutRow.appendChild(dia)
+    const tag = document.createElement('span')
+    tag.className = 'tl-mut-tag'
+    tag.style.left = pct + '%'
+    tag.textContent = '◆ MUTATION'
+    mutRow.appendChild(tag)
+  })
+
+  snapshots.forEach((s, i) => {
+    const pct = (i / (snapshots.length - 1)) * 100
+    const dot = document.createElement('div')
+    dot.className = 'tl-marker'
+    dot.style.left = pct + '%'
+    dot.style.background = s.mutation ? '#ff3355' : (i === snapshots.length - 1 ? '#8866ff' : '#00e5a0')
+    dot.style.borderColor = dot.style.background
+    dot.style.boxShadow  = `0 0 8px ${dot.style.background}`
+    dot.title = s.date
+    dot.onclick = () => { document.getElementById('tlSlider').value = i; onSlider(i) }
+    marks.appendChild(dot)
+
+    const d = document.createElement('span')
+    d.textContent = s.date
+    d.style.color = s.mutation ? '#ff3355' : (i === snapshots.length-1 ? '#8866ff' : '#334455')
+    dates.appendChild(d)
+  })
+}
+
+// ══════════════════════════════════════════
+//  构建全量节点+边（跨所有快照）
+// ══════════════════════════════════════════
+function buildAllNodesLinks(snapshots) {
+  const nodeMap = new Map()
+  const linkSet = new Set()
+  const links   = []
+
+  snapshots.forEach(snap => {
+    snap.nodes.forEach(n => {
+      if (!nodeMap.has(n.id)) nodeMap.set(n.id, { id: n.id, x: 0, y: 0 })
+    })
+    snap.links.forEach(l => {
+      const key = l.s + '||' + l.t
+      if (!linkSet.has(key)) {
+        linkSet.add(key)
+        links.push({ source: l.s, target: l.t, prob: l.p })
+      }
+    })
+  })
+
+  return { nodes: Array.from(nodeMap.values()), links }
+}
+
+// ══════════════════════════════════════════
+//  初始化力导向图
+// ══════════════════════════════════════════
+function initGraph(userIdx) {
+  svg.selectAll('*').remove()
+  curUser = userIdx
+
+  const snaps = USERS_DATA[userIdx].snapshots
+  buildTimeline(snaps)
+  document.getElementById('tlSlider').value = 0
+
+  const { nodes, links } = buildAllNodesLinks(snaps)
+  allNodes = nodes
+  allLinks = links
+
+  const W = window.innerWidth
+  const H = window.innerHeight
+
+  // ── defs: glow filters ──
+  const defs = svg.append('defs')
+  ;['active','mutation','predicted'].forEach(s => {
+    const f = defs.append('filter').attr('id','glow-'+s)
+      .attr('x','-70%').attr('y','-70%').attr('width','240%').attr('height','240%')
+    f.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation', s==='mutation'?9:7).attr('result','b')
+    const m = f.append('feMerge')
+    m.append('feMergeNode').attr('in','b')
+    m.append('feMergeNode').attr('in','b')
+    m.append('feMergeNode').attr('in','SourceGraphic')
+  })
+
+  // 径向渐变 per-node（预先注册）
+  nodes.forEach(n => {
+    ;['active','mutation','predicted'].forEach(s => {
+      const id = 'grad-' + n.id.replace(/[\s#]/g,'-') + '-' + s
+      const g = defs.append('radialGradient').attr('id', id)
+        .attr('cx','50%').attr('cy','35%')
+      if (s === 'active') {
+        g.append('stop').attr('offset','0%').attr('stop-color','#ffffff').attr('stop-opacity','.95')
+        g.append('stop').attr('offset','45%').attr('stop-color',COLOR.active).attr('stop-opacity','.65')
+        g.append('stop').attr('offset','100%').attr('stop-color',COLOR.active).attr('stop-opacity','.04')
+      } else if (s === 'mutation') {
+        g.append('stop').attr('offset','0%').attr('stop-color','#ffcccc').attr('stop-opacity','1')
+        g.append('stop').attr('offset','40%').attr('stop-color',COLOR.mutation).attr('stop-opacity','.75')
+        g.append('stop').attr('offset','100%').attr('stop-color',COLOR.mutation).attr('stop-opacity','.06')
+      } else {
+        g.append('stop').attr('offset','0%').attr('stop-color',COLOR.predicted).attr('stop-opacity','.5')
+        g.append('stop').attr('offset','100%').attr('stop-color',COLOR.predicted).attr('stop-opacity','.03')
+      }
+    })
+  })
+
+  // ── 模拟 ──
+  sim = d3.forceSimulation(allNodes)
+    .force('link', d3.forceLink(allLinks).id(d=>d.id).distance(260).strength(.4))
+    .force('charge', d3.forceManyBody().strength(-520))
+    .force('center', d3.forceCenter(W/2, H/2 - 50))
+    .force('collision', d3.forceCollide(72))
+    .alphaDecay(.02)
+
+  // ── 边层 ──
+  linkG = svg.append('g').attr('class','link-layer')
+  const linkSel = linkG.selectAll('.lnk').data(allLinks).join('g').attr('class','lnk')
+  linkSel.append('line').attr('class','lnk-line')
+    .attr('stroke','#00cc99').attr('stroke-opacity',0).attr('stroke-width',1)
+    .style('pointer-events','stroke')
+    .on('mouseover', function(e, d) {
+      d3.select(this.parentNode).select('.lnk-lbl').attr('opacity', 1)
+      d3.select(this).attr('stroke-opacity', .8)
+    })
+    .on('mouseout', function(e, d) {
+      d3.select(this.parentNode).select('.lnk-lbl').attr('opacity', 0)
+      d3.select(this).attr('stroke-opacity', .35)
+    })
+  linkSel.append('text').attr('class','lnk-lbl')
+    .attr('fill','#00e5b0').attr('font-size','10px').attr('font-family','Courier New,monospace')
+    .attr('text-anchor','middle').attr('opacity',0)
+
+  // ── 节点层 ──
+  nodeG = svg.append('g').attr('class','node-layer')
+  const nodeSel = nodeG.selectAll('.nd').data(allNodes).join('g')
+    .attr('class','nd').style('opacity',0).style('pointer-events','none')
+    .call(d3.drag()
+      .on('start',(e,d)=>{ if(!e.active)sim.alphaTarget(.3).restart(); d.fx=d.x; d.fy=d.y })
+      .on('drag', (e,d)=>{ d.fx=e.x; d.fy=e.y })
+      .on('end',  (e,d)=>{ if(!e.active)sim.alphaTarget(0); d.fx=null; d.fy=null })
+    )
+
+  nodes.forEach(n => {
+    const g = nodeG.select(`.nd[data-id="${n.id}"]`)
+    // mark for selection
+  })
+
+  // 预先为每个节点添加可重用子元素
+  const ndG = nodeG.selectAll('.nd')
+  // 轨道环 (3层)
+  ;[0,1,2].forEach(i => {
+    ndG.append('circle').attr('class','ring ring'+i)
+      .attr('fill','none').attr('stroke-width', 1.5 - i*.3)
+      .attr('opacity',0)
+  })
+  // burst circle (只用一次)
+  ndG.append('circle').attr('class','burst-circle').attr('fill','none').attr('stroke-width',1.5).attr('opacity',0)
+  // 内部填充
+  ndG.append('circle').attr('class','node-fill').attr('r',0)
+  // 节点名
+  ndG.append('text').attr('class','node-lbl')
+    .attr('text-anchor','middle').attr('font-family','Courier New,monospace')
+    .attr('font-weight','bold').attr('font-size','13px')
+  // 突变/预测 子标签
+  ndG.append('text').attr('class','node-sublbl')
+    .attr('text-anchor','middle').attr('font-family','Courier New,monospace')
+    .attr('font-size','10px')
+  // 统计信息
+  ;['eng','ctr','watch'].forEach((k,j) => {
+    ndG.append('text').attr('class','stat-'+k)
+      .attr('font-family','Courier New,monospace').attr('font-size','10px')
+      .attr('fill','#8ab').attr('opacity',0)
+  })
+
+  // hover
+  ndG.on('mouseenter', (e,d)=>{
+    const snap = USERS_DATA[curUser].snapshots[curSnap]
+    const nd = snap.nodes.find(n=>n.id===d.id)
+    if (!nd) return
+    const tt = document.getElementById('tooltip')
+    tt.classList.add('show')
+    document.getElementById('tt-name').textContent = nd.id
+    document.getElementById('tt-name').style.color = COLOR[nd.state]
+    document.getElementById('tt-state').textContent = nd.state.toUpperCase()
+    document.getElementById('tt-state').style.color = COLOR[nd.state]
+    document.getElementById('tt-stats').innerHTML = nd.state !== 'predicted'
+      ? `<div><span class="p-muted">ENG: </span>${nd.eng}%</div>
+         <div><span class="p-muted">CTR: </span>${nd.ctr}%</div>
+         <div><span class="p-muted">WATCH: </span>${nd.watch}s</div>`
+      : '<div style="color:#556a7a">— awaiting data —</div>'
+  })
+  .on('mousemove', e=>{
+    const tt = document.getElementById('tooltip')
+    tt.style.left = (e.clientX+16)+'px'; tt.style.top = (e.clientY-10)+'px'
+  })
+  .on('mouseleave', ()=> document.getElementById('tooltip').classList.remove('show'))
+
+  sim.on('tick', ()=>{
+    linkG.selectAll('.lnk-line')
+      .attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
+      .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y)
+    linkG.selectAll('.lnk-lbl')
+      .attr('x',d=>(d.source.x+d.target.x)/2)
+      .attr('y',d=>(d.source.y+d.target.y)/2-5)
+    nodeG.selectAll('.nd')
+      .attr('transform', d=>`translate(${d.x??0},${d.y??0})`)
+  })
+
+  updateSnapshot(0, 0)
+}
+
+// ══════════════════════════════════════════
+//  快照更新（带过渡动画）
+// ══════════════════════════════════════════
+function updateSnapshot(idx, dur=700) {
+  curSnap = idx
+  const snap = USERS_DATA[curUser].snapshots[idx]
+  const nodeMap = new Map(snap.nodes.map(n=>[n.id,n]))
+  const linkKey = new Set(snap.links.map(l=>l.s+'||'+l.t))
+
+  // ── 更新面板文字 ──
+  document.getElementById('phaseName').textContent = snap.label
+  document.getElementById('phaseDate').textContent = snap.date + ' · ' + snap.sub
+  document.getElementById('statusTxt').textContent = snap.status
+  document.getElementById('evoPct').textContent    = snap.evoPct
+  document.getElementById('evoPct').style.color    = snap.evoPct==='HIGH' ? '#ff3355' : snap.evoPct==='MEDIUM' ? '#FB923C' : '#00e5a0'
+  document.getElementById('tlThumb').style.left    = (idx/(snap.t==5?5:5))*100+'%'
+  document.getElementById('tlLbl').textContent     = snap.date
+
+  const activeC  = snap.nodes.filter(n=>n.state==='active').length
+  const predC    = snap.nodes.filter(n=>n.state==='predicted').length
+  const hasMut   = snap.nodes.some(n=>n.state==='mutation')
+  document.getElementById('d-active').textContent = activeC
+  document.getElementById('d-pred').textContent   = predC
+  document.getElementById('d-links').textContent  = snap.links.length
+  const dmut = document.getElementById('d-mut')
+  dmut.textContent = hasMut ? 'YES' : 'NO'
+  dmut.className   = hasMut ? 'p-red p-val' : 'p-val'
+
+  // 突变警告横幅
+  const banner = document.getElementById('mutBanner')
+  if (snap.mutation) {
+    banner.style.opacity = '1'
+    setTimeout(()=>{ banner.style.opacity='0' }, 2400)
+    // burst effect at mutation node position
+    const mutNode = allNodes.find(n => n.id === snap.nodes.find(nd=>nd.state==='mutation')?.id)
+    if (mutNode) fireBurst(mutNode)
+  }
+
+  // ── 节点 ──
+  nodeG.selectAll('.nd').each(function(d) {
+    const g = d3.select(this)
+    const nd = nodeMap.get(d.id)
+    const visible = !!nd
+    const state   = nd?.state ?? 'active'
+    const col     = COLOR[state]
+    const baseR   = nd?.r ?? 0
+    const gradId  = `url(#grad-${d.id.replace(/[\s#]/g,'-')}-${state})`
+
+    // 整体可见度
+    g.style('pointer-events', visible ? 'auto' : 'none')
+    g.transition().duration(dur).style('opacity', visible ? 1 : 0)
+
+    // 内核
+    g.select('.node-fill')
+      .attr('filter', visible && state!=='predicted' ? `url(#glow-${state})` : null)
+      .transition().duration(dur)
+      .attr('r', baseR)
+      .attr('fill', gradId)
+
+    // 轨道环
+    ;[0,1,2].forEach(i => {
+      const ring = g.select('.ring'+i)
+      ring.attr('stroke', col)
+        .style('--base', (baseR+8)+'px')
+        .style('--max',  (baseR+55+i*18)+'px')
+        .transition().duration(dur)
+        .attr('r', visible ? baseR+8 : 0)
+        .attr('opacity', visible ? 1 : 0)
+
+      // 重置 CSS 动画
+      const animName = state==='mutation' ? 'ring-mutation' : state==='predicted' ? 'ring-predict' : 'ring-active'
+      const delay    = [0,.8,1.6][i]
+      ring.style('animation', visible ? `${animName} ${[2.4,2.4,3.2][i+(state==='mutation'?0:0)]}s ease-out ${delay}s infinite` : 'none')
+      if (state==='mutation') ring.style('animation-duration', `${[1.4,1.6,1.8][i]}s`)
+    })
+
+    // 节点名
+    g.select('.node-lbl')
+      .text(d.id)
+      .attr('y', -(baseR+14))
+      .attr('fill', state==='predicted' ? '#9977ff' : '#c8eeff')
+      .attr('opacity', state==='predicted' ? .70 : 1)
+      .attr('font-size', baseR < 16 ? '11px' : '13px')
+
+    // 子标签
+    const sublbl = g.select('.node-sublbl')
+    if (state==='mutation' && visible) {
+      sublbl.text('Abnormal Mutation · High Confidence')
+        .attr('y', baseR+20).attr('fill','#ff3355')
+        .style('animation','node-mut-flash 1.2s infinite')
+        .attr('opacity',1)
+    } else if (state==='predicted' && visible) {
+      sublbl.text('Predicted Interest')
+        .attr('y', baseR+18).attr('fill','#9977ff')
+        .style('animation','node-pred 2s infinite')
+        .attr('opacity',.7)
+    } else {
+      sublbl.text('').attr('opacity',0)
+    }
+
+    // 统计仅在 hover tooltip 中显示，节点上不常驻
+    g.select('.stat-eng').attr('opacity',0)
+    g.select('.stat-ctr').attr('opacity',0)
+    g.select('.stat-watch').attr('opacity',0)
+  })
+
+  // ── 边 ──
+  linkG.selectAll('.lnk').each(function(d) {
+    const key = (d.source.id||d.source) + '||' + (d.target.id||d.target)
+    const active = linkKey.has(key)
+    const lnkData = snap.links.find(l => l.s+('')+l.t === (d.source.id||d.source)+(d.target.id||d.target))
+    const prob = lnkData ? lnkData.p : 0
+
+    d3.select(this).select('.lnk-line')
+      .transition().duration(dur)
+      .attr('stroke-opacity', active ? .35 : 0)
+      .attr('stroke-width',  active ? Math.max(1, prob*5) : 0)
+
+    // P= 标签仅在 hover 时显示，默认隐藏
+    d3.select(this).select('.lnk-lbl')
+      .text(active ? `P=${prob.toFixed(2)}` : '')
+      .attr('opacity', 0)
+  })
+
+  // 粒子流：刷新可见边 + 突变节点集合
+  const mutNodeIds = new Set(snap.nodes.filter(n=>n.state==='mutation').map(n=>n.id))
+  spawnFlowParticles(linkKey, mutNodeIds)
+
+  // 扰动模拟
+  sim.alpha(.18).restart()
+}
+
+// ══════════════════════════════════════════
+//  爆发特效 (突变时)
+// ══════════════════════════════════════════
+function fireBurst(node) {
+  const circle = svg.append('circle')
+    .attr('cx', node.x ?? window.innerWidth/2)
+    .attr('cy', node.y ?? window.innerHeight/2)
+    .attr('r', 0).attr('fill','none')
+    .attr('stroke','#ff3355').attr('stroke-width',2)
+    .attr('opacity',.85)
+
+  circle.transition().duration(900).ease(d3.easeQuadOut)
+    .attr('r', 130).attr('opacity', 0)
+    .on('end', () => circle.remove())
+}
+
+// ══════════════════════════════════════════
+//  时间轴交互
+// ══════════════════════════════════════════
+function onSlider(val) {
+  val = Math.round(val)
+  document.getElementById('tlSlider').value = val
+  document.getElementById('tlThumb').style.left = (val / 5 * 100) + '%'
+  updateSnapshot(val)
+}
+
+// ══════════════════════════════════════════
+//  自动播放
+// ══════════════════════════════════════════
+let autoIdx = 0
+function togglePlay() {
+  const btn = document.getElementById('playBtn')
+  playing = !playing
+  if (playing) {
+    btn.textContent = '⏸ PAUSE'
+    autoIdx = curSnap
+    playTimer = setInterval(() => {
+      autoIdx = (autoIdx + 1) % 6
+      document.getElementById('tlSlider').value = autoIdx
+      updateSnapshot(autoIdx)
+      if (autoIdx === 5) {
+        clearInterval(playTimer)
+        playing = false
+        btn.textContent = '▶ AUTO PLAY'
+      }
+    }, 1800)
+  } else {
+    clearInterval(playTimer)
+    btn.textContent = '▶ AUTO PLAY'
+  }
+}
+
+// ══════════════════════════════════════════
+//  切换用户
+// ══════════════════════════════════════════
+function switchUser(idx) {
+  curUser = idx
+  playing = false
+  clearInterval(playTimer)
+  document.getElementById('playBtn').textContent = '▶ AUTO PLAY'
+  initGraph(idx)
+}
+
+// ══════════════════════════════════════════
+//  初始化
+// ══════════════════════════════════════════
+initGraph(0)
+window.addEventListener('resize', () => {
+  if (sim) sim.force('center', d3.forceCenter(window.innerWidth/2, window.innerHeight/2-50)).alpha(.3).restart()
+})
+</script>
+</body>
+</html>
