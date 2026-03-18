@@ -228,6 +228,9 @@ def preprocess_kuairand(
     tag_matrix = pd.DataFrame(tag_vectors, index=item_tags[item_col], columns=tag_mlb.classes_)
     tag_matrix.index.name = item_col
 
+    from .tag_display import ensure_tag_mapping
+    ensure_tag_mapping(data_path)
+
     # Auto-detect columns if not explicitly provided.
     if categorical_cols is None:
         categorical_cols = [
