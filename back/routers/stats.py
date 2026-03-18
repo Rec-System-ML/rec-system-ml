@@ -4,7 +4,7 @@ routers/stats.py
 GET /api/stats  →  Dashboard 首页 KPI 数据
 """
 from fastapi import APIRouter
-from core.loader import get_artifact
+from utils.loader import get_artifact
 
 router = APIRouter()
 

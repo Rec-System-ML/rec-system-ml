@@ -2,13 +2,13 @@
 api.py  —  KuaiRand-1K 推荐系统 FastAPI 主入口
 ================================================
 启动方式:
-    uvicorn api:app --reload --port 8000
+    uvicorn api:app --reload --port 8100
     # 或指定 artifact / data 路径:
     python api.py --artifact checkpoints/mvp_artifact.joblib \
                   --data-dir "../KuaiRand-1K/data"
 
-前端访问: http://localhost:8000
-API 文档: http://localhost:8000/docs
+前端访问: http://localhost:8100
+API 文档: http://localhost:8100/docs
 """
 from __future__ import annotations
 
@@ -17,17 +17,16 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-# 确保 models/ 和 shared/ 可导入
+# 确保 back/ 目录可导入（models/, routers/, utils/）
 _back = Path(__file__).resolve().parent
-for p in [str(_back), str(_back / "shared")]:
-    if p not in sys.path:
-        sys.path.insert(0, p)
+if str(_back) not in sys.path:
+    sys.path.insert(0, str(_back))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-import core.loader as loader
+import utils.loader as loader
 from routers import stats, user, recommend, cold_start
 
 
@@ -57,7 +56,7 @@ _artifact_path, _data_dir = _parse_args()
 async def lifespan(app: FastAPI):
     if not _artifact_path.exists():
         print(f"[WARNING] artifact not found: {_artifact_path}")
-        print("          先运行: python main.py --data-dir <path> --rows 250000")
+        print("          先运行: python train.py --data-dir <path> --rows 250000")
     elif not _data_dir.exists():
         print(f"[WARNING] data dir not found: {_data_dir}")
     else:

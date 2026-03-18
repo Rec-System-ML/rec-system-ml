@@ -1,15 +1,31 @@
+"""
+train.py  —  模型训练脚本
+=========================
+训练 ItemKNN + XGBoost CTR 模型，生成 checkpoints/mvp_artifact.joblib。
+
+用法:
+    python train.py
+    python train.py --data-dir ../KuaiRand-1K/data --rows 250000 --output-dir .
+"""
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+# 确保 back/ 目录可导入（models/, utils/）
+_back = Path(__file__).resolve().parent
+if str(_back) not in sys.path:
+    sys.path.insert(0, str(_back))
 
 import joblib
 import numpy as np
 import pandas as pd
 
 from models import CTRFeatureBuilder, CTRModel, ItemKNNConfig, ItemKNNRecommender
-from shared_bootstrap import ensure_shared_on_path
+from models.reranker import TimeDecayReranker
+from utils.evaluation import compute_classification_metrics, evaluate_ranking
 
 
 def _load_interactions(data_dir: Path, nrows: int) -> pd.DataFrame:
@@ -35,8 +51,6 @@ def _temporal_split(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.Da
 
 
 def _ranking_metrics(pred_df: pd.DataFrame, truth_df: pd.DataFrame, k: int = 10) -> dict:
-    from evaluation import evaluate_ranking
-
     return evaluate_ranking(
         pred_df=pred_df,
         truth_df=truth_df.rename(columns={"is_click": "label"}),
@@ -49,9 +63,6 @@ def _ranking_metrics(pred_df: pd.DataFrame, truth_df: pd.DataFrame, k: int = 10)
 
 
 def train_and_evaluate(sample_rows: int, data_dir: Path, output_dir: Path) -> dict:
-    from evaluation import compute_classification_metrics
-    from reranker import TimeDecayReranker
-
     output_dir.mkdir(parents=True, exist_ok=True)
     checkpoints_dir = output_dir / "checkpoints"
     artifacts_dir = output_dir / "artifacts"
@@ -82,13 +93,11 @@ def train_and_evaluate(sample_rows: int, data_dir: Path, output_dir: Path) -> di
     val_xgb_prob = ctr_model.predict_proba(X_val)
     test_xgb_prob = ctr_model.predict_proba(X_test)
 
-    # Blend score for ranking and demo
+    # Blend score
     val_blend = 0.6 * val_xgb_prob + 0.4 * val_knn_prob
     test_blend = 0.6 * test_xgb_prob + 0.4 * test_knn_prob
 
-    # Time-decay rerank score (used later in demo; keep as optional component)
     reranker = TimeDecayReranker(gamma=0.75, beta=1.0)
-    _ = reranker  # keep object persisted in artifact
 
     metrics = {
         "item_knn_val": compute_classification_metrics(val_df["is_click"], val_knn_prob),
@@ -129,26 +138,20 @@ def train_and_evaluate(sample_rows: int, data_dir: Path, output_dir: Path) -> di
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train CDS524 MVP recommender.")
-    parser.add_argument("--rows", type=int, default=250_000, help="Rows loaded from KuaiRand log csv")
-    parser.add_argument(
-        "--data-dir",
-        type=str,
-        default="",
-        help="Override dataset directory. Default points to recsys-shared KuaiRand-1K data folder.",
-    )
-    parser.add_argument("--output-dir", type=str, default=".", help="Project output root")
+    parser = argparse.ArgumentParser(description="Train KuaiRand-1K recommender.")
+    parser.add_argument("--rows", type=int, default=250_000, help="交互日志加载行数")
+    parser.add_argument("--data-dir", type=str, default="", help="KuaiRand-1K/data 路径")
+    parser.add_argument("--output-dir", type=str, default=".", help="输出目录（存放 checkpoints/）")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
-    shared_path = ensure_shared_on_path()
     args = parse_args()
 
     if args.data_dir:
         data_dir = Path(args.data_dir).expanduser().resolve()
     else:
-        data_dir = (shared_path / "data/KuaiRand-1K/data").resolve()
+        data_dir = (_back.parent / "KuaiRand-1K" / "data").resolve()
 
     output_dir = Path(args.output_dir).expanduser().resolve()
     metrics = train_and_evaluate(sample_rows=args.rows, data_dir=data_dir, output_dir=output_dir)

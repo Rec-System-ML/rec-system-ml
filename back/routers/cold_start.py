@@ -21,7 +21,7 @@ import numpy as np
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from core.loader import (
+from utils.loader import (
     get_video_tags, tag_name,
     get_popular_candidates, knn_score_from_history,
 )

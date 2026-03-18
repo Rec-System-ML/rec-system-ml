@@ -1,26 +1,17 @@
 """
-core/loader.py
---------------
+utils/loader.py
+---------------
 单例：启动时加载 artifact + 原始数据，供所有 router 共用。
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-
-# 确保 shared/ 可导入
-_back_dir = Path(__file__).resolve().parent.parent
-_shared_dir = _back_dir / "shared"
-if str(_shared_dir) not in sys.path:
-    sys.path.insert(0, str(_shared_dir))
-if str(_back_dir) not in sys.path:
-    sys.path.insert(0, str(_back_dir))
 
 import joblib
 import numpy as np
 import pandas as pd
 
-from data_pipeline import parse_tag_ids
+from .pipeline import parse_tag_ids
 
 
 # ── 全局状态 ────────────────────────────────────────────────────────────────

@@ -17,8 +17,8 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-import core.loader as _loader
-from core.loader import get_artifact, get_video_tags, tag_name, knn_score_from_history
+import utils.loader as _loader
+from utils.loader import get_artifact, get_video_tags, tag_name, knn_score_from_history
 
 router = APIRouter()
 

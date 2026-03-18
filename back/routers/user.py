@@ -5,7 +5,7 @@ GET /api/users              → available user ID list
 GET /api/user/{user_id}/profile → user profile (tag distribution + stats)
 """
 from fastapi import APIRouter, HTTPException
-from core.loader import get_artifact, get_user_tag_profile
+from utils.loader import get_artifact, get_user_tag_profile
 
 router = APIRouter()
 
