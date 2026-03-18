@@ -68,10 +68,10 @@ python main.py --data-dir ../KuaiRand-1K/data
 
 ```bash
 cd back
-uvicorn api:app --reload --port 8000
+python api.py
 ```
 
-API 文档：[http://localhost:8000/docs](http://localhost:8000/docs)
+API 文档：[http://localhost:8100/docs](http://localhost:8100/docs)
 
 ### 4. 生成兴趣演化数据
 
@@ -82,11 +82,6 @@ python gen_interest_data.py
 > 输出 `ui_prototype/interest_evolution_data.js`（已含预生成版本，可跳过）。
 
 ### 5. 打开前端
-
-```bash
-cd ui_prototype
-python -m http.server 8100
-```
 
 访问 [http://localhost:8100](http://localhost:8100)
 
