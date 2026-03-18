@@ -8,25 +8,25 @@
 
 | 模块 | 说明 |
 |------|------|
-| **Overview Dashboard** | KPI 统计、CTR 信号对比、模型综合指标 |
+| **Overview Dashboard** | KPI 统计、CTR 信号对比、三版本模型指标对比（Baseline / +ItemKNN / +XGBoost） |
 | **User Profile** | 用户活跃度、历史兴趣 Tag 分布（环形图）、KNN 邻域散点 |
-| **Live Simulate** | 新用户冷启动（Pop → KNN 渐进个性化）+ 老用户实时重排 |
-| **Interest Evolution** | D3.js 力导向图 · Markov 转移概率 · 时间衰减 · 粒子流动效果 · 突变检测 |
+| **Live Simulate** | 新用户冷启动（Popularity → KNN 渐进个性化）+ 老用户实时重排 |
+| **Interest Evolution** | D3.js 力导向图 · Markov 转移概率 · 时间衰减 |
 
 ---
 
 ## 技术栈
 
 **后端**
-- FastAPI + Uvicorn
-- ItemKNN（物品协同过滤）+ XGBoost CTR 预测
+- FastAPI + Uvicorn（端口 8100）
+- ItemKNN 协同过滤 + XGBoost CTR 预测（混合打分 0.4:0.6）
 - 时间衰减重排（`w(t) = exp(-λΔt)`）
 
 **前端**
-- 纯 HTML/CSS/JS（无框架）
+- 纯 HTML / CSS / JS（无框架依赖）
 - D3.js v7 力导向图
 - Chart.js 统计图表
-- Canvas 粒子动画
+- Bootstrap 5 布局
 
 ---
 
@@ -55,35 +55,34 @@ cd back
 pip install -r requirements.txt
 ```
 
-### 2. 训练模型 & 生成 Artifact
-
-```bash
-cd back
-python main.py --data-dir ../KuaiRand-1K/data
-```
-
-> 训练 ItemKNN + XGBoost 并将 artifact 保存到 `back/checkpoints/mvp_artifact.joblib`（约 55 MB）。**已随仓库附带预训练版本，可跳过此步骤直接启动后端。**
-
-### 3. 启动后端
+### 2. 启动后端
 
 ```bash
 cd back
 python api.py
 ```
 
+访问 [http://localhost:8100](http://localhost:8100) 即可打开前端 Dashboard。
 API 文档：[http://localhost:8100/docs](http://localhost:8100/docs)
 
-### 4. 生成兴趣演化数据
+> **已附带预训练模型**（`back/checkpoints/mvp_artifact.joblib`，55MB），可直接启动，无需重新训练。
+
+### 3. （可选）重新训练模型
 
 ```bash
-python gen_interest_data.py
+cd back
+python train.py --data-dir ../KuaiRand-1K/data --rows 250000
 ```
 
-> 输出 `ui_prototype/interest_evolution_data.js`（已含预生成版本，可跳过）。
+训练 ItemKNN + XGBoost 并将 artifact 保存到 `back/checkpoints/mvp_artifact.joblib`，约需 30 分钟。
 
-### 5. 打开前端
+### 4. （可选）重新生成兴趣演化数据
 
-访问 [http://localhost:8100](http://localhost:8100)
+```bash
+python ui_prototype/gen_interest_data.py
+```
+
+> 输出 `ui_prototype/interest_evolution_data.js`，已含预生成版本，可跳过。
 
 ---
 
@@ -92,23 +91,33 @@ python gen_interest_data.py
 ```
 .
 ├── back/
-│   ├── api.py                   # FastAPI 入口
-│   ├── main.py                  # 训练 & 构建 artifact
-│   ├── core/loader.py           # 数据加载与特征工程
+│   ├── api.py                   # FastAPI 服务入口（含静态文件挂载）
+│   ├── train.py                 # 模型训练脚本
+│   ├── checkpoints/
+│   │   └── mvp_artifact.joblib  # 预训练模型（55MB）
+│   ├── artifacts/
+│   │   └── metrics.json         # 各模型评估指标
 │   ├── models/
 │   │   ├── item_knn.py          # ItemKNN 协同过滤
-│   │   └── xgboost_ctr.py       # XGBoost CTR 模型
+│   │   ├── xgboost_ctr.py       # XGBoost CTR 模型
+│   │   └── reranker.py          # 时间衰减重排器
 │   ├── routers/
 │   │   ├── user.py              # 用户画像 API
 │   │   ├── recommend.py         # 推荐 & 实时重排 API
 │   │   ├── cold_start.py        # 冷启动 API
-│   │   └── stats.py             # 统计 API
-│   └── shared/                  # 数据管道、评估、重排器
+│   │   └── stats.py             # 统计 & 指标 API
+│   └── utils/
+│       ├── loader.py            # artifact 加载
+│       ├── pipeline.py          # 数据读取与清洗
+│       ├── evaluation.py        # 评估指标计算
+│       └── tags.py              # Tag ID → 名称映射
 ├── ui_prototype/
-│   ├── index.html               # 主 Dashboard
-│   ├── interest_evolution.html  # 兴趣演化可视化
-│   └── interest_evolution_data.js  # 预生成用户演化数据
-├── gen_interest_data.py         # 从数据集生成演化数据
+│   ├── index.html               # 主 Dashboard（HTML 结构）
+│   ├── style.css                # 全局样式
+│   ├── app.js                   # 交互逻辑 & Chart.js 图表
+│   ├── interest_evolution.html  # 兴趣演化全屏可视化
+│   ├── interest_evolution_data.js  # 预生成用户演化数据
+│   └── gen_interest_data.py     # 演化数据生成脚本
 ├── KuaiRand-1K/                 # 数据集目录（data/ 需自行下载）
 └── PROJECT_DESIGN.md            # 详细设计文档
 ```
@@ -119,13 +128,12 @@ python gen_interest_data.py
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| GET | `/api/stats` | 模型评估指标（AUC、NDCG@10 等） |
 | GET | `/api/users` | 可用用户列表 |
 | GET | `/api/user/{id}/profile` | 用户画像（Tag 分布、活跃度） |
 | GET | `/api/popular` | 全站热门 Top-N |
-| POST | `/api/recommend` | ItemKNN + XGBoost 推荐 |
-| POST | `/api/recommend/realtime` | 老用户实时重排 |
-| POST | `/api/cold_start` | 冷启动推荐（含 alpha 演化） |
-| GET | `/api/stats` | 模型评估指标 |
+| POST | `/api/recommend/realtime` | 老用户实时重排推荐 |
+| POST | `/api/cold-start/recommend` | 冷启动推荐（含 alpha 渐进演化） |
 
 ---
 
