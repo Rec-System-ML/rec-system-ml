@@ -59,16 +59,16 @@ pip install -r requirements.txt
 
 ```bash
 cd back
-python api.py
+python main.py --data-dir ../KuaiRand-1K/data
 ```
 
-> 首次运行会训练 ItemKNN + XGBoost 并将 artifact 保存到 `back/checkpoints/mvp_artifact.joblib`（约 55 MB，已加入 .gitignore）。
+> 训练 ItemKNN + XGBoost 并将 artifact 保存到 `back/checkpoints/mvp_artifact.joblib`（约 55 MB）。**已随仓库附带预训练版本，可跳过此步骤直接启动后端。**
 
 ### 3. 启动后端
 
 ```bash
 cd back
-uvicorn main:app --reload --port 8000
+uvicorn api:app --reload --port 8000
 ```
 
 API 文档：[http://localhost:8000/docs](http://localhost:8000/docs)
@@ -83,14 +83,12 @@ python gen_interest_data.py
 
 ### 5. 打开前端
 
-直接用浏览器打开 `ui_prototype/index.html`，或启动任意静态服务器：
-
 ```bash
 cd ui_prototype
-python -m http.server 5500
+python -m http.server 8100
 ```
 
-访问 [http://localhost:5500](http://localhost:5500)
+访问 [http://localhost:8100](http://localhost:8100)
 
 ---
 
@@ -99,8 +97,8 @@ python -m http.server 5500
 ```
 .
 ├── back/
-│   ├── main.py                  # FastAPI 入口
-│   ├── api.py                   # 训练 & 构建 artifact
+│   ├── api.py                   # FastAPI 入口
+│   ├── main.py                  # 训练 & 构建 artifact
 │   ├── core/loader.py           # 数据加载与特征工程
 │   ├── models/
 │   │   ├── item_knn.py          # ItemKNN 协同过滤
