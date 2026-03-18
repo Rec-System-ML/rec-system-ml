@@ -1,0 +1,42 @@
+# 数据目录（不提交到 Git）
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# 实验追踪
+mlruns/
+mlflow/
+
+# 缓存
+.cache/
+*.log
+
+# macOS
+.DS_Store
+
+# 模型文件（可选，根据需要调整）
+*.pkl
+*.joblib
+*.h5
+*.pth
