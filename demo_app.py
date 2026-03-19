@@ -27,8 +27,8 @@ def build_candidate_frame(user_id: int, candidates: List[int]) -> pd.DataFrame:
     )
 
 
-@st.cache_data(show_spinner="Building interest graph from KuaiRand...")
-def _build_graph(user_id: int, data_dir: str, sample_rows: int = 250_000):
+@st.cache_resource(show_spinner="Building interest graph from KuaiRand...")
+def _build_graph(user_id: int | None, data_dir: str, sample_rows: int = 250_000):
     from services.graph_builder import build_demo_from_kuairand
     return build_demo_from_kuairand(data_dir=data_dir, user_id=user_id, sample_rows=sample_rows)
 
@@ -106,26 +106,35 @@ def main() -> None:
         st.caption("Powered by D3.js force-directed layout with time-decay encoding & mutation detection")
 
         data_dir = str((shared_path / "data/KuaiRand-1K/data").resolve())
-        graph_user = st.number_input("User ID for graph", min_value=0, value=0, step=1, key="graph_uid")
+        graph_user = st.number_input("User ID for graph (0 = 自動選最活躍用戶)", min_value=0, value=0, step=1, key="graph_uid")
         use_demo = st.checkbox("Use built-in demo data (no KuaiRand needed)", value=False)
 
         if st.button("Generate Graph", type="primary", key="gen_graph"):
             if use_demo:
                 from interest_graph import render_demo_interest_graph
                 html = render_demo_interest_graph(width=1060, height=680)
+                import streamlit.components.v1 as components
+                components.html(html, height=720, scrolling=False)
             else:
                 try:
-                    graph_nodes, graph_links = _build_graph(int(graph_user), data_dir)
-                    from interest_graph import render_interest_graph
-                    html = render_interest_graph(graph_nodes, graph_links, width=1060, height=680)
+                    uid = None if graph_user == 0 else int(graph_user)
+                    graph_nodes, graph_links = _build_graph(uid, data_dir)
+                    if not graph_nodes:
+                        st.info("該用戶無互動數據，改用內建 demo 數據展示。")
+                        from interest_graph import render_demo_interest_graph
+                        html = render_demo_interest_graph(width=1060, height=680)
+                    else:
+                        from interest_graph import render_interest_graph
+                        html = render_interest_graph(graph_nodes, graph_links, width=1060, height=680)
+                    import streamlit.components.v1 as components
+                    components.html(html, height=720, scrolling=False)
                 except Exception as exc:
                     st.error(f"Graph build failed: {exc}")
                     from interest_graph import render_demo_interest_graph
                     html = render_demo_interest_graph(width=1060, height=680)
                     st.info("Falling back to demo data.")
-
-            import streamlit.components.v1 as components
-            components.html(html, height=720, scrolling=False)
+                    import streamlit.components.v1 as components
+                    components.html(html, height=720, scrolling=False)
 
 
 if __name__ == "__main__":

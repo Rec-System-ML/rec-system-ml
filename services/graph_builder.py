@@ -125,28 +125,59 @@ def build_interest_graph(
             mutation_ids.add(int(tid))
 
     # ── 7. status classification ────────────────────────────────────────
-    conditions = [
-        tag_stats["tag_id"].isin(mutation_ids),
-        tag_stats["decay"] > 0.7,
-    ]
-    choices = ["mutation", "active"]
-    tag_stats["status"] = np.select(conditions, choices, default="fading")
+    # Use recency percentile instead of a fixed decay threshold so active/fading
+    # classes remain visually balanced across different users.
+    tag_stats["status"] = "fading"
+    tag_stats["_recency_pct"] = tag_stats["last_time"].rank(method="average", pct=True)
+    tag_stats.loc[tag_stats["_recency_pct"] >= 0.60, "status"] = "active"
+    tag_stats.loc[tag_stats["tag_id"].isin(mutation_ids), "status"] = "mutation"
+
+    # Guardrail: avoid degenerate "all active" output when many tags share
+    # similar timestamps; keep oldest non-mutation tags as fading.
+    non_mut_mask = ~tag_stats["tag_id"].isin(mutation_ids)
+    if non_mut_mask.sum() >= 3 and tag_stats.loc[non_mut_mask, "status"].eq("active").all():
+        oldest_n = max(1, int(non_mut_mask.sum() * 0.3))
+        oldest_idx = tag_stats.loc[non_mut_mask].nsmallest(oldest_n, "last_time").index
+        tag_stats.loc[oldest_idx, "status"] = "fading"
 
     top = tag_stats.nlargest(top_k_tags, "count").copy()
+    if not top["status"].eq("fading").any():
+        fading_pool = tag_stats.loc[tag_stats["status"] == "fading"].sort_values(
+            "count", ascending=False
+        )
+        if not fading_pool.empty:
+            replace_idx = top.loc[top["status"] != "mutation", "count"].idxmin()
+            top.loc[replace_idx, top.columns] = fading_pool.iloc[0][top.columns].values
+
     top_set: set[int] = set(top["tag_id"])
     active_set: set[int] = set(top.loc[top["status"] == "active", "tag_id"])
     user_all_tags: set[int] = set(tag_stats["tag_id"])
 
-    # predicted nodes: co-occur with active tags globally but unseen by user
+    # predicted nodes: co-occur with active tags globally.
+    # Prefer unseen-by-user tags; if none exist, fall back to not-currently-active tags
+    # so "future" state is still represented in dense-user cases.
     if active_set:
         cols_active = [c for c in active_set if c in tag_matrix.columns]
         if cols_active:
             active_mask = tag_matrix[cols_active].max(axis=1) == 1
             neighbor_sums = tag_matrix.loc[active_mask].sum(axis=0)
-            neighbor_tags = {int(c) for c in tag_matrix.columns[neighbor_sums > 0]}
-            predicted = neighbor_tags - user_all_tags
+            neighbor_sums = neighbor_sums[neighbor_sums > 0].sort_values(ascending=False)
+
+            predicted_candidates = [
+                int(c) for c in neighbor_sums.index if int(c) not in user_all_tags
+            ]
+            if not predicted_candidates:
+                predicted_candidates = [
+                    int(c) for c in neighbor_sums.index if int(c) not in active_set
+                ]
+            if not predicted_candidates:
+                global_pop = tag_matrix.sum(axis=0).sort_values(ascending=False)
+                predicted_candidates = [
+                    int(c) for c in global_pop.index if int(c) not in active_set
+                ]
+
             slots = max(2, top_k_tags - len(top))
-            for ptid in list(predicted)[:slots]:
+            for ptid in predicted_candidates[:slots]:
                 pred_row: dict = {
                     "tag_id": ptid,
                     "count": 0,
@@ -154,7 +185,7 @@ def build_interest_graph(
                     "first_time": max_t,
                     "delta_days": 0.0,
                     "decay": 0.65,
-                    "timestamp": 0.92,
+                    "timestamp": 0.85,
                     "status": "predicted",
                 }
                 for c in eng_cols_present:

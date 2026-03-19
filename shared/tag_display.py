@@ -9,40 +9,64 @@ import pandas as pd
 log = logging.getLogger(__name__)
 
 _FALLBACK_NAMES: Dict[int, str] = {
-    1: "舞蹈 Dance",
-    2: "音乐 Music",
-    3: "游戏 Gaming",
-    4: "美妆 Beauty",
-    5: "穿搭 Fashion",
-    6: "娱乐 Entertain",
-    7: "运动 Sports",
-    8: "颜值 Looks",
-    9: "搞笑 Comedy",
-    10: "旅游 Travel",
-    11: "生活 Lifestyle",
-    12: "美食 Food",
-    13: "三农 Agriculture",
-    14: "教育 Education",
-    15: "才艺 Talent",
-    16: "健康 Health",
-    17: "动物 Pets",
-    18: "汽车 Auto",
-    19: "情感 Emotion",
-    20: "二次元 ACG",
-    21: "历史 History",
-    22: "财经 Finance",
-    23: "宗教 Religion",
-    24: "星座命理 Astrology",
-    25: "亲子 Parenting",
-    26: "摄影 Photo",
-    27: "数码科技 DigiTech",
-    28: "资讯 News",
-    29: "科学 Science",
-    30: "法律 Law",
-    35: "军事 Military",
-    36: "房产家居 Home",
-    37: "奇人异象 Bizarre",
-    38: "读书 Reading",
+    1: "舞蹈",
+    2: "音乐",
+    3: "游戏",
+    4: "美妆",
+    5: "时尚",
+    6: "明星娱乐",
+    7: "运动",
+    8: "颜值",
+    9: "喜剧",
+    10: "旅游",
+    11: "生活",
+    12: "美食",
+    13: "三农",
+    14: "教育",
+    15: "艺术",
+    16: "健康",
+    17: "宠物",
+    18: "汽车",
+    19: "情感",
+    20: "二次元",
+    21: "人文",
+    22: "财经",
+    23: "人文",
+    24: "星座命理",
+    25: "亲子",
+    26: "摄影",
+    27: "高新数码",
+    28: "民生资讯",
+    29: "科学与法律",
+    30: "科学与法律",
+    34: "自拍",
+    35: "军事",
+    36: "房产家居",
+    37: "奇人异象",
+    38: "读书",
+    39: "影视综",
+    40: "影视综",
+    41: "科学与法律",
+    42: "汽车",
+    43: "影视综",
+    44: "游戏",
+    45: "颜值",
+    46: "明星娱乐",
+    47: "军事",
+    48: "二次元",
+    49: "颜值",
+    50: "情感",
+    51: "音乐",
+    52: "短剧",
+    53: "影视综",
+    54: "时尚",
+    56: "影视综",
+    60: "美食",
+    62: "美食",
+    64: "影视综",
+    65: "时尚",
+    67: "自拍",
+    68: "影视综",
 }
 
 TAG_DISPLAY_NAMES: Dict[int, str] = {**_FALLBACK_NAMES}
@@ -53,10 +77,10 @@ _NAME_COL_CANDIDATES = (
     "tag_label", "display_name",
 )
 _CATEGORIES_FILES: Sequence[str] = (
-    "kuairand_video_categories.csv",
-    "video_categories.csv",
     "tag_mapping.csv",
     "tag_names.csv",
+    "kuairand_video_categories.csv",
+    "video_categories.csv",
 )
 
 
@@ -193,8 +217,14 @@ def ensure_tag_mapping(data_path: str | Path) -> int:
     return 0
 
 
+def has_tag_display_name(tag_id: int) -> bool:
+    return int(tag_id) in TAG_DISPLAY_NAMES
+
+
 def get_tag_display_name(tag_id: int) -> str:
-    return TAG_DISPLAY_NAMES.get(int(tag_id), f"tag_{int(tag_id)}")
+    tid = int(tag_id)
+    # Avoid leaking internal placeholder style (tag_xx) into UI labels.
+    return TAG_DISPLAY_NAMES.get(tid, f"标签{tid}")
 
 
 def format_tag_ids(tag_ids: Iterable[int], include_raw: bool = True) -> str:
