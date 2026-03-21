@@ -7,26 +7,27 @@ from pathlib import Path
 
 def ensure_shared_on_path() -> Path:
     """
-    Make recsys-shared importable.
+    Ensure the project root is on sys.path so ``shared`` and ``interest_graph`` import.
 
-    Priority:
-    1) env RECSYS_SHARED_PATH
-    2) ../recsys-shared (sibling dir, e.g. /Users/Shared/.../HK/LU/recsys-shared)
+    Returns the bundled ``shared/`` directory (for default KuaiRand data paths).
+
+    Optional: set ``RECSYS_SHARED_PATH`` to override the **data root** only — the
+    directory that contains ``data/KuaiRand-1K/data``. Imports always use this
+    project's ``shared`` package.
     """
-    env_path = os.getenv("RECSYS_SHARED_PATH")
-    if env_path:
-        shared_path = Path(env_path).expanduser().resolve()
-    else:
-        shared_path = (Path(__file__).resolve().parent / "../recsys-shared").resolve()
-
-    if not shared_path.exists():
+    project_root = Path(__file__).resolve().parent
+    bundled_shared = project_root / "shared"
+    if not bundled_shared.is_dir():
         raise FileNotFoundError(
-            f"recsys-shared not found: {shared_path}. "
-            "Set RECSYS_SHARED_PATH to your recsys-shared directory."
+            f"Bundled shared package not found: {bundled_shared}",
         )
 
-    shared_path_str = str(shared_path)
-    if shared_path_str not in sys.path:
-        sys.path.insert(0, shared_path_str)
+    root_str = str(project_root)
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
 
-    return shared_path
+    env_data_root = os.getenv("RECSYS_SHARED_PATH")
+    if env_data_root:
+        return Path(env_data_root).expanduser().resolve()
+
+    return bundled_shared

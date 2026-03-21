@@ -6,6 +6,10 @@ from typing import List
 
 import pandas as pd
 
+from shared_bootstrap import ensure_shared_on_path
+
+ensure_shared_on_path()
+
 
 def videos_by_tags(
     tag_matrix: pd.DataFrame,
@@ -32,14 +36,9 @@ def _load_tag_matrix_and_interactions(
     sample_rows: int = 250_000,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load interactions and tag_matrix from KuaiRand data dir."""
-    import sys
-    _shared = (Path(__file__).resolve().parent.parent / "../recsys-shared").resolve()
-    if _shared.exists() and str(_shared) not in sys.path:
-        sys.path.insert(0, str(_shared))
-
-    from data_pipeline import load_kuairand_tables, parse_tag_ids
+    from shared.data_pipeline import load_kuairand_tables, parse_tag_ids
+    from shared.tag_display import ensure_tag_mapping
     from sklearn.preprocessing import MultiLabelBinarizer
-    from tag_display import ensure_tag_mapping
 
     tables = load_kuairand_tables(data_dir)
     ensure_tag_mapping(data_dir)

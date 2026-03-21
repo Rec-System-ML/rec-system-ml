@@ -21,19 +21,18 @@ from __future__ import annotations
 # ═══════════════════════════════════════════════════════════════════════════════
 
 import math
-import sys
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-_shared = (Path(__file__).resolve().parent.parent / "../recsys-shared").resolve()
-if str(_shared) not in sys.path:
-    sys.path.insert(0, str(_shared))
+from shared_bootstrap import ensure_shared_on_path
+
+ensure_shared_on_path()
 
 from interest_graph.graph_data import InterestLink, InterestNode
-from tag_display import get_tag_display_name
+from shared.tag_display import get_tag_display_name
 
 
 def build_interest_graph(
@@ -468,9 +467,9 @@ def build_demo_from_kuairand(
     sample_rows 默認 250,000——原始 CSV 約 665 萬行，截取前 25 萬行以控制計算成本
     （可通過 python main.py --rows 6000000 加載更多）。
     """
-    from data_pipeline import load_kuairand_tables, parse_tag_ids
+    from shared.data_pipeline import load_kuairand_tables, parse_tag_ids
+    from shared.tag_display import ensure_tag_mapping
     from sklearn.preprocessing import MultiLabelBinarizer
-    from tag_display import ensure_tag_mapping
 
     tables = load_kuairand_tables(data_dir)
     ensure_tag_mapping(data_dir)

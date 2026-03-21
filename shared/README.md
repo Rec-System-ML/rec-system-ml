@@ -1,7 +1,8 @@
-# recsys-shared
+# Shared toolkit (bundled in this project)
 
+This directory is the in-repo copy of the former **recsys-shared** utilities. The project root is on `sys.path` so you import as **`shared.*`** (not a separate checkout).
 
-## What this repo contains
+## Contents
 
 - `data_pipeline.py`: shared KuaiRand preprocessing pipeline
 - `evaluation.py`: unified evaluation wrappers (with optional MS Recommenders backend)
@@ -20,9 +21,9 @@ pip install -U pandas numpy scikit-learn matplotlib seaborn shap mlflow recommen
 ## Quick usage
 
 ```python
-from data_pipeline import preprocess_kuairand
-from reranker import TimeDecayReranker
-from evaluation import evaluate_ranking
+from shared.data_pipeline import preprocess_kuairand
+from shared.reranker import TimeDecayReranker
+from shared.evaluation import evaluate_ranking
 
 train, val, test, encoders, tag_mlb, tag_matrix = preprocess_kuairand(
     data_path="/path/to/kuairand",
@@ -30,5 +31,9 @@ train, val, test, encoders, tag_mlb, tag_matrix = preprocess_kuairand(
 
 reranker = TimeDecayReranker(gamma=0.7, beta=1.0)
 ```
+
+## KuaiRand data
+
+Default training path is `shared/data/KuaiRand-1K/data/` (create or symlink if missing). Override with `python main.py --data-dir /path/to/data` or set `RECSYS_SHARED_PATH` to a directory that contains `data/KuaiRand-1K/data`.
 
 
