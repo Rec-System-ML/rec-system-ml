@@ -35,7 +35,7 @@ def _temporal_split(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.Da
 
 
 def _ranking_metrics(pred_df: pd.DataFrame, truth_df: pd.DataFrame, k: int = 10) -> dict:
-    from evaluation import evaluate_ranking
+    from shared.evaluation import evaluate_ranking
 
     return evaluate_ranking(
         pred_df=pred_df,
@@ -49,8 +49,8 @@ def _ranking_metrics(pred_df: pd.DataFrame, truth_df: pd.DataFrame, k: int = 10)
 
 
 def train_and_evaluate(sample_rows: int, data_dir: Path, output_dir: Path) -> dict:
-    from evaluation import compute_classification_metrics
-    from reranker import TimeDecayReranker
+    from shared.evaluation import compute_classification_metrics
+    from shared.reranker import TimeDecayReranker
 
     output_dir.mkdir(parents=True, exist_ok=True)
     checkpoints_dir = output_dir / "checkpoints"
@@ -135,7 +135,7 @@ def parse_args() -> argparse.Namespace:
         "--data-dir",
         type=str,
         default="",
-        help="Override dataset directory. Default points to recsys-shared KuaiRand-1K data folder.",
+        help="Override dataset directory. Default: <project>/shared/data/KuaiRand-1K/data (or RECSYS_SHARED_PATH/data/...).",
     )
     parser.add_argument("--output-dir", type=str, default=".", help="Project output root")
     return parser.parse_args()

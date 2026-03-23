@@ -5,6 +5,9 @@ __pycache__/
 .env
 venv/
 .venv/
+checkpoints/
+artifacts/
+docs/
 
 # 数据集原始文件（体积过大，请自行下载）
 KuaiRand-1K/data/

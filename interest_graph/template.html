@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Interest Evolution Graph</title>
+  <style>
+    *{box-sizing:border-box}
+    :root{--bg:#060a14;--grid:rgba(60,130,255,0.09);--green:#2cffaa;--cyan:#5eeaff;--purple:#c07aff;--red:#ff4a4a;--text:#daeaff}
+    html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;
+      font-family:"Inter","Segoe UI",system-ui,sans-serif;color:var(--text);
+      background:radial-gradient(ellipse at 50% -25%,rgba(40,110,255,.22),transparent 50%),
+                 radial-gradient(ellipse at 8% 110%,rgba(110,60,255,.18),transparent 55%),var(--bg)}
+    .scene{position:relative;width:__WIDTH__px;height:__HEIGHT__px;margin:0 auto;
+      background:linear-gradient(var(--grid) 1px,transparent 1px),
+                 linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+                 linear-gradient(180deg,rgba(24,56,110,.14),rgba(6,10,20,.9) 40%,#060a14);
+      background-size:40px 40px,40px 40px,100% 100%;
+      border-radius:14px;border:1px solid rgba(100,170,255,.3);
+      box-shadow:inset 0 0 80px rgba(14,80,200,.2),0 14px 44px rgba(0,6,20,.8);overflow:hidden}
+    .layer{position:absolute;inset:0}
+    #bgCanvas,#texCanvas{pointer-events:none}
+    #gSvg{z-index:3}
+
+    .hud-title{position:absolute;right:14px;top:10px;z-index:9;min-width:290px;padding:7px 10px;
+      border-radius:6px;border:1px solid rgba(130,180,255,.5);
+      background:linear-gradient(180deg,rgba(10,20,36,.92),rgba(8,14,28,.75));
+      font-size:10px;line-height:1.35;letter-spacing:.4px;text-transform:uppercase;
+      text-shadow:0 0 12px rgba(130,190,255,.3)}
+    .hud-badge{position:absolute;right:16px;top:68px;z-index:9;padding:4px 8px;border-radius:4px;
+      border:1px solid rgba(140,200,255,.45);background:rgba(8,16,32,.85);font-size:10px;
+      letter-spacing:.4px;text-transform:uppercase}
+    .data-panel{position:absolute;right:14px;bottom:68px;z-index:9;padding:7px 10px;width:155px;
+      border-radius:6px;border:1px solid rgba(100,155,215,.42);
+      background:linear-gradient(180deg,rgba(14,24,44,.8),rgba(10,18,32,.8));
+      font-size:10px;line-height:1.5;text-transform:uppercase;letter-spacing:.3px}
+    .timeline{position:absolute;left:6%;right:6%;bottom:8px;z-index:9}
+    .tl-row{position:relative;height:22px;display:flex;align-items:center}
+    #timeScrubber{-webkit-appearance:none;appearance:none;width:100%;height:7px;border-radius:99px;
+      outline:none;cursor:pointer;border:1px solid rgba(170,210,255,.22);
+      background:linear-gradient(90deg,#3a5a8f,#5f9dff 25%,#ba6dff 50%,#76f5ff 75%,#8f6dff);
+      box-shadow:0 0 16px rgba(120,190,255,.35)}
+    #timeScrubber::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;cursor:grab;
+      background:radial-gradient(circle,#e8f8ff 25%,#60d4ff);border:2px solid rgba(170,230,255,.85);
+      box-shadow:0 0 10px rgba(90,215,255,.85),0 0 26px rgba(90,195,255,.35)}
+    #timeScrubber::-moz-range-thumb{width:16px;height:16px;border-radius:50%;cursor:grab;
+      background:radial-gradient(circle,#e8f8ff 25%,#60d4ff);border:2px solid rgba(170,230,255,.85);
+      box-shadow:0 0 10px rgba(90,215,255,.85)}
+    .tl-labels{margin-top:3px;display:flex;justify-content:space-between;font-size:9px;color:#a0c4f0;
+      letter-spacing:.45px;text-transform:uppercase}
+    .tl-time{position:absolute;top:-15px;transform:translateX(-50%);font-size:8px;color:#8cc0f0;
+      pointer-events:none;text-shadow:0 0 7px rgba(90,170,255,.45);transition:left .04s linear}
+
+    .edge{fill:none;stroke-linecap:round;filter:url(#gl-edge)}
+
+    .prob-bg{fill:rgba(8,18,34,.82);stroke-width:.8;rx:8;ry:8}
+    .prob-bg-green{stroke:rgba(60,255,180,.6)}
+    .prob-bg-purple{stroke:rgba(190,140,255,.6)}
+    .prob-bg-red{stroke:rgba(255,120,120,.6)}
+    .prob-bg-gray{stroke:rgba(160,160,160,.6)}
+    .prob-text{text-anchor:middle;font-size:9px;font-weight:600;letter-spacing:.3px;pointer-events:none}
+    .prob-text-green{fill:#8affcc}
+    .prob-text-purple{fill:#d8b8ff}
+    .prob-text-red{fill:#ffaaaa}
+    .prob-text-gray{fill:#c0c0c0}
+
+    .node-label{font-size:13px;fill:#eef6ff;text-anchor:middle;pointer-events:none;
+      text-shadow:0 0 14px rgba(8,20,50,.9)}
+    .metrics-text{font-size:8px;fill:#b8d8f8;text-anchor:middle;pointer-events:none;opacity:.85;
+      letter-spacing:.2px}
+
+    .orbit{fill:none;pointer-events:none}
+    .center-dot{pointer-events:none}
+    .pred-tag{font-size:9px;fill:#d0c4ff;text-anchor:middle;opacity:.9;pointer-events:none}
+    .mutation-icon{font-weight:700;font-size:20px;fill:#ffd4d4;text-anchor:middle;pointer-events:none}
+    .mutation-badge{font-size:9px;fill:#ffaaaa;text-anchor:middle;pointer-events:none;
+      animation:pulse-r 1.4s ease-in-out infinite}
+
+    .pred-ring{fill:none;stroke:rgba(195,150,255,.8);stroke-width:1.2;
+      animation:ring-exp 3s linear infinite;transform-origin:center;pointer-events:none}
+    .pred-ring.rb{animation-delay:1s}.pred-ring.rc{animation-delay:2s}
+
+    @keyframes pulse-r{0%,100%{opacity:.5}50%{opacity:1}}
+    @keyframes ring-exp{0%{transform:scale(.85);opacity:.7}100%{transform:scale(1.55);opacity:0}}
+  </style>
+</head>
+<body>
+<div class="scene">
+  <canvas id="bgCanvas" class="layer" width="__WIDTH__" height="__HEIGHT__"></canvas>
+  <svg id="gSvg" class="layer" width="__WIDTH__" height="__HEIGHT__" viewBox="0 0 __WIDTH__ __HEIGHT__">
+    <defs>
+      <filter id="gl-g" x="-400%" y="-400%" width="800%" height="800%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="a"/>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="b"/>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="28" result="c"/>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="48" result="d"/>
+        <feMerge><feMergeNode in="d"/><feMergeNode in="c"/><feMergeNode in="b"/><feMergeNode in="a"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="gl-p" x="-400%" y="-400%" width="800%" height="800%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="a"/>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="b"/>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="24" result="c"/>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="42" result="d"/>
+        <feMerge><feMergeNode in="d"/><feMergeNode in="c"/><feMergeNode in="b"/><feMergeNode in="a"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="gl-r" x="-400%" y="-400%" width="800%" height="800%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="a"/>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="14" result="b"/>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="30" result="c"/>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="50" result="d"/>
+        <feMerge><feMergeNode in="d"/><feMergeNode in="c"/><feMergeNode in="b"/><feMergeNode in="a"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="gl-edge" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="a"/>
+        <feMerge><feMergeNode in="a"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="gl-dot" x="-300%" y="-300%" width="600%" height="600%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="a"/>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="b"/>
+        <feGaussianBlur in="SourceGraphic" stdDeviation="22" result="c"/>
+        <feMerge><feMergeNode in="c"/><feMergeNode in="b"/><feMergeNode in="a"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <radialGradient id="rg-green"><stop offset="0%" stop-color="#ffffff"/><stop offset="20%" stop-color="#d4ffe8"/><stop offset="55%" stop-color="#60ffb8"/><stop offset="100%" stop-color="rgba(40,255,170,0)"/></radialGradient>
+      <radialGradient id="rg-purple"><stop offset="0%" stop-color="#ffffff"/><stop offset="22%" stop-color="#e0d0ff"/><stop offset="55%" stop-color="#b080ff"/><stop offset="100%" stop-color="rgba(160,100,255,0)"/></radialGradient>
+      <radialGradient id="rg-red"><stop offset="0%" stop-color="#ffffff"/><stop offset="18%" stop-color="#ffc0c0"/><stop offset="50%" stop-color="#ff5050"/><stop offset="100%" stop-color="rgba(255,50,50,0)"/></radialGradient>
+    </defs>
+    <g id="eLay"></g><g id="elLay"></g><g id="nLay"></g>
+  </svg>
+  <canvas id="texCanvas" class="layer" width="__WIDTH__" height="__HEIGHT__"></canvas>
+
+  <div class="hud-title" id="hudT">USER INTEREST EVOLUTION &bull; TIME DECAY ENCODING &amp; MUTATION DETECTION<br/>STATUS: <span id="hudS">ACTIVE ANALYSIS</span></div>
+  <div class="hud-badge" id="hudB">EVOLUTION PROBABILITY: HIGH</div>
+  <div class="data-panel" id="dP">DATA POINTS: <span id="dpC">-</span><br/>MUTATION: <span id="dpM">-</span><br/>ACTIVE: <span id="dpA">-</span></div>
+
+  <div class="timeline" id="tl">
+    <div class="tl-row"><span class="tl-time" id="tInd" style="left:75%">NOW</span>
+      <input type="range" id="timeScrubber" min="0" max="100" value="75" step="1"/></div>
+    <div class="tl-labels"><span>PAST (3 MONTHS)</span><span>PRESENT</span><span>FUTURE PREDICTION</span></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script>
+const W=Number(__WIDTH__),H=Number(__HEIGHT__);
+const ST=__SHOW_TIMELINE__,SI=__SHOW_INFO__;
+const nodes=__NODES_DATA__,links=__LINKS_DATA__;
+
+if(!ST)document.getElementById("tl").style.display="none";
+if(!SI){document.getElementById("hudT").style.display="none";document.getElementById("hudB").style.display="none";document.getElementById("dP").style.display="none";}
+
+nodes.forEach(n=>{n._oD=n.decay;n._oS=n.status;});
+
+/* ── helpers ── */
+const nr=d=>{
+  if(d.status==="mutation")return 52;
+  if(d.status==="predicted")return 32+d.decay*14;
+  if(d.status==="active")return 38+d.decay*18;
+  return 20+d.decay*14;
+};
+const nOp=d=>{
+  if(d.status==="mutation")return 1;
+  if(d.status==="predicted")return .92;
+  if(d.status==="active")return .97;
+  return .36+d.decay*.44;
+};
+const nFill=d=>{
+  if(d.status==="mutation")return"rgba(140,20,20,.65)";
+  if(d.status==="predicted")return`rgba(60,30,110,${.35+d.decay*.3})`;
+  if(d.status==="active")return`rgba(8,60,45,${.35+d.decay*.35})`;
+  return`rgba(80,80,80,${.25+d.decay*.35})`;
+};
+const nStroke=d=>{
+  if(d.status==="mutation")return"rgba(255,110,110,.95)";
+  if(d.status==="predicted")return"rgba(200,160,255,.88)";
+  if(d.status==="active")return"rgba(110,255,200,.92)";
+  return"rgba(150,150,150,.5)";
+};
+const nFilter=d=>{
+  if(d.status==="mutation")return"url(#gl-r)";
+  if(d.status==="predicted")return"url(#gl-p)";
+  if(d.status==="active")return"url(#gl-g)";
+  return null;
+};
+const mutPath=(R,s=14,ir=.62)=>{
+  const p=[],iR=R*ir,st=Math.PI/s;let a=-Math.PI/2;
+  for(let i=0;i<s*2;i++){const r=i%2===0?R:iR;p.push(`${Math.cos(a)*r},${Math.sin(a)*r}`);a+=st;}
+  return`M ${p.join(" L ")} Z`;
+};
+const probColor=d=>{
+  const sn=typeof d.source==="object"?d.source:nodes.find(n=>n.id===d.source);
+  const tn=typeof d.target==="object"?d.target:nodes.find(n=>n.id===d.target);
+  if(sn&&sn._oS==="mutation"||tn&&tn._oS==="mutation")return"red";
+  if(sn&&sn._oS==="predicted"||tn&&tn._oS==="predicted")return"purple";
+  if(sn&&sn._oS==="active"||tn&&tn._oS==="active")return"green";
+  return"gray";
+};
+
+/* ── SVG ── */
+const svg=d3.select("#gSvg"),defs=svg.select("defs"),
+  eLay=svg.select("#eLay"),elLay=svg.select("#elLay"),nLay=svg.select("#nLay");
+const bgC=document.getElementById("bgCanvas").getContext("2d");
+const txC=document.getElementById("texCanvas").getContext("2d");
+
+/* ── gradients (userSpaceOnUse) ── */
+const gIds=[];
+links.forEach((_,i)=>{
+  const id=`eg${i}`;gIds.push(id);
+  const pc=probColor(links[i]);
+  const g=defs.append("linearGradient").attr("id",id).attr("gradientUnits","userSpaceOnUse");
+  if(pc==="red"){
+    g.append("stop").attr("offset","0%").attr("stop-color","#ff7070");
+    g.append("stop").attr("offset","100%").attr("stop-color","#ff4040");
+  }else if(pc==="purple"){
+    g.append("stop").attr("offset","0%").attr("stop-color","#80ddff");
+    g.append("stop").attr("offset","100%").attr("stop-color","#d080ff");
+  }else if(pc==="gray"){
+    g.append("stop").attr("offset","0%").attr("stop-color","#a0a0a0");
+    g.append("stop").attr("offset","100%").attr("stop-color","#707070");
+  }else{
+    g.append("stop").attr("offset","0%").attr("stop-color","#70d8ff");
+    g.append("stop").attr("offset","45%").attr("stop-color","#a0ffe8");
+    g.append("stop").attr("offset","100%").attr("stop-color","#2cffaa");
+  }
+});
+
+/* ── curved edges ── */
+const cPath=d=>{
+  const sx=d.source.x,sy=d.source.y,tx=d.target.x,ty=d.target.y;
+  const mx=(sx+tx)/2,my=(sy+ty)/2,dx=tx-sx,dy=ty-sy,l=Math.sqrt(dx*dx+dy*dy)||1;
+  const off=20+d.probability*30;
+  return`M${sx},${sy}Q${mx+(-dy/l)*off},${my+(dx/l)*off} ${tx},${ty}`;
+};
+const cMid=d=>{
+  const sx=d.source.x,sy=d.source.y,tx=d.target.x,ty=d.target.y;
+  const mx=(sx+tx)/2,my=(sy+ty)/2,dx=tx-sx,dy=ty-sy,l=Math.sqrt(dx*dx+dy*dy)||1;
+  const off=(20+d.probability*30)*.5;
+  return{x:mx+(-dy/l)*off,y:my+(dx/l)*off};
+};
+
+const linkSel=eLay.selectAll("path.edge").data(links).join("path")
+  .attr("class","edge")
+  .attr("stroke",(_,i)=>`url(#${gIds[i]})`)
+  .attr("stroke-width",d=>1.2+d.probability*9)
+  .attr("stroke-opacity",d=>.2+d.probability*.72);
+
+/* ── V3: pill-shaped probability badges ── */
+const badgeG=elLay.selectAll("g.badge").data(links).join("g").attr("class","badge");
+badgeG.append("rect").attr("class",d=>`prob-bg prob-bg-${probColor(d)}`)
+  .attr("width",48).attr("height",18).attr("x",-24).attr("y",-12);
+badgeG.append("text").attr("class",d=>`prob-text prob-text-${probColor(d)}`)
+  .attr("dy",2).text(d=>`P=${d.probability.toFixed(2)}`);
+
+/* ── nodes ── */
+const nodeSel=nLay.selectAll("g.node").data(nodes,d=>d.id)
+  .join(enter=>{
+    const g=enter.append("g").attr("class","node");
+    g.each(function(d){
+      const r=d3.select(this),R=nr(d);
+
+      /* V1: concentric orbital rings for ALL nodes */
+      const ringCount=d.status==="active"?4:d.status==="predicted"?3:d.status==="mutation"?4:2;
+      const ringColor=d.status==="mutation"?"rgba(255,80,80,":"rgba("+
+        (d.status==="active"?"100,255,200,":d.status==="predicted"?"180,140,255,":"140,140,140,");
+      for(let i=1;i<=ringCount;i++){
+        const rOpa=(.5-i*.09)>0?.5-i*.09:.07;
+        r.append("circle").attr("class","orbit")
+          .attr("r",R*(1+i*.2))
+          .attr("stroke",ringColor+rOpa+")")
+          .attr("stroke-width",1.6-.18*i)
+          .attr("stroke-dasharray",d.status==="fading"?"3,5":"none")
+          .attr("filter",i<=2?"url(#gl-edge)":"none");
+      }
+
+      /* main shape */
+      if(d.status==="mutation"){
+        r.append("path").attr("class","node-shape mut-shape").attr("d",mutPath(R));
+        r.append("text").attr("class","mutation-icon").attr("dy",7).text("\u26A0");
+        r.append("text").attr("class","mutation-badge").attr("dy",R+20).text("Abnormal Mutation \u2022 High Confidence");
+      }else{
+        r.append("circle").attr("class","node-shape");
+      }
+
+      /* V2: double-layer center bloom: large soft halo + bright core */
+      if(d.status==="active"||d.status==="predicted"){
+        const grad=d.status==="active"?"url(#rg-green)":"url(#rg-purple)";
+        r.append("circle").attr("class","center-dot")
+          .attr("r",R*.8).attr("fill",grad).attr("opacity",.5).attr("filter","url(#gl-dot)");
+        r.append("circle").attr("class","center-dot")
+          .attr("r",R*.32).attr("fill","#ffffff").attr("opacity",.92).attr("filter","url(#gl-dot)");
+      }
+      if(d.status==="mutation"){
+        r.append("circle").attr("class","center-dot")
+          .attr("r",R*.6).attr("fill","url(#rg-red)").attr("opacity",.55).attr("filter","url(#gl-dot)");
+        r.append("circle").attr("class","center-dot")
+          .attr("r",R*.22).attr("fill","#ffe0e0").attr("opacity",.85).attr("filter","url(#gl-dot)");
+      }
+
+      /* predicted expanding rings */
+      if(d._oS==="predicted"){
+        r.append("circle").attr("class","pred-ring ra");
+        r.append("circle").attr("class","pred-ring rb");
+        r.append("circle").attr("class","pred-ring rc");
+        r.append("text").attr("class","pred-tag").attr("dy",-R-14).text("Predicted Interest");
+      }
+
+      /* label */
+      r.append("text").attr("class","node-label").attr("dy",5).text(d.label);
+
+      /* V4: engagement metrics */
+      if(d.metrics){
+        const keys=Object.keys(d.metrics);
+        keys.forEach((k,i)=>{
+          r.append("text").attr("class","metrics-text")
+            .attr("dy",R+16+i*11).text(`${k}: ${d.metrics[k]}`);
+        });
+      }
+    });
+    return g;
+  });
+
+const applyStyles=()=>{
+  nodeSel.selectAll(".orbit")
+    .attr("stroke",d=>{
+      if(d.status==="mutation")return"rgba(255,80,80,.45)";
+      if(d.status==="predicted")return"rgba(180,140,255,.45)";
+      if(d.status==="active")return"rgba(100,255,200,.42)";
+      return"rgba(150,150,150,.35)";
+    })
+    .attr("stroke-dasharray",d=>d.status==="fading"?"3,5":"none")
+    .attr("opacity",d=>d.status==="fading"?.55:.9);
+  nodeSel.selectAll("circle.node-shape")
+    .attr("r",d=>nr(d)).attr("fill",d=>nFill(d)).attr("stroke",d=>nStroke(d))
+    .attr("stroke-width",d=>d.status==="active"?2.5:d.status==="mutation"?2.5:1.5)
+    .attr("opacity",d=>nOp(d)).attr("filter",d=>nFilter(d));
+  nodeSel.selectAll("path.mut-shape")
+    .attr("d",d=>mutPath(nr(d))).attr("fill",d=>nFill(d)).attr("stroke",d=>nStroke(d))
+    .attr("stroke-width",2).attr("opacity",.98).attr("filter","url(#gl-r)")
+    .style("animation","pulse-r 1.4s ease-in-out infinite");
+  nodeSel.selectAll(".pred-ring").attr("r",d=>nr(d)*.9);
+};
+applyStyles();
+
+/* drag */
+nodeSel.call(d3.drag()
+  .on("start",(e,d)=>{if(!e.active)sim.alphaTarget(.28).restart();d.fx=d.x;d.fy=d.y;})
+  .on("drag",(e,d)=>{d.fx=e.x;d.fy=e.y;})
+  .on("end",(e,d)=>{if(!e.active)sim.alphaTarget(0);d.fx=null;d.fy=null;})
+);
+
+/* simulation */
+const sim=d3.forceSimulation(nodes)
+  .force("link",d3.forceLink(links).id(d=>d.id).distance(d=>140-d.probability*45))
+  .force("charge",d3.forceManyBody().strength(-580))
+  .force("center",d3.forceCenter(W/2,H/2-14))
+  .force("collision",d3.forceCollide().radius(d=>nr(d)+28).iterations(3));
+
+sim.on("tick",()=>{
+  nodes.forEach(d=>{
+    const pad=nr(d)+26;
+    d.x=Math.max(pad,Math.min(W-pad,d.x));
+    d.y=Math.max(pad,Math.min(H-pad,d.y));
+  });
+  linkSel.attr("d",cPath);
+  links.forEach((d,i)=>{
+    defs.select(`#${gIds[i]}`).attr("x1",d.source.x).attr("y1",d.source.y).attr("x2",d.target.x).attr("y2",d.target.y);
+  });
+  badgeG.attr("transform",d=>{const m=cMid(d);return`translate(${m.x},${m.y})`;});
+  nodeSel.attr("transform",d=>`translate(${d.x},${d.y})`);
+});
+
+/* ── background: 3-layer particles ── */
+const mkL=(n,rMin,rMax,aMin,aMax,sMin,sMax)=>d3.range(n).map(()=>({
+  x:Math.random()*W,y:Math.random()*H,r:rMin+Math.random()*(rMax-rMin),
+  a:aMin+Math.random()*(aMax-aMin),s:sMin+Math.random()*(sMax-sMin),
+  h:Math.random()<.4?272:Math.random()<.7?185:155}));
+const bgL=[mkL(120,.3,.9,.06,.2,.02,.06),mkL(65,.9,2.2,.12,.35,.06,.16),mkL(25,2,4,.25,.55,.12,.35)];
+
+const drawBg=ts=>{
+  bgC.clearRect(0,0,W,H);
+  bgC.globalCompositeOperation="lighter";
+  for(const ly of bgL)for(const p of ly){
+    p.y-=p.s;if(p.y<-8){p.y=H+8;p.x=Math.random()*W;}
+    const pulse=.55+.45*Math.sin(ts*.0012+p.x*.008);
+    bgC.beginPath();bgC.fillStyle=`hsla(${p.h},80%,60%,${p.a*pulse})`;
+    bgC.arc(p.x,p.y,p.r,0,Math.PI*2);bgC.fill();
+  }
+  bgC.globalCompositeOperation="source-over";
+};
+
+/* ── V5: edge particle trail on Canvas ── */
+const edgeParticles=[];
+links.forEach((l,i)=>{
+  const pc=probColor(l);
+  const isMut=pc==="red";
+  const count=isMut?22:12;
+  const col = isMut
+    ? "rgba(255,90,90,"
+    : (pc === "purple"
+      ? "rgba(180,130,255,"
+      : (pc === "gray" ? "rgba(160,160,160," : "rgba(120,255,200,"));
+  for(let j=0;j<count;j++){
+    edgeParticles.push({li:i,t:Math.random(),speed:.0015+Math.random()*.005,
+      r:isMut?1.5+Math.random()*2:.8+Math.random()*1.5,
+      color:col});
+  }
+});
+
+const drawEdgeParticles=()=>{
+  txC.save();
+  txC.globalCompositeOperation="lighter";
+  for(const ep of edgeParticles){
+    const d=links[ep.li];
+    if(!d.source.x||d._visible===false)continue;
+    ep.t+=ep.speed;if(ep.t>1)ep.t-=1;
+    const t=ep.t,sx=d.source.x,sy=d.source.y,tx=d.target.x,ty=d.target.y;
+    const mx=(sx+tx)/2,my=(sy+ty)/2,dx=tx-sx,dy=ty-sy,l=Math.sqrt(dx*dx+dy*dy)||1;
+    const off=20+d.probability*30;
+    const cx=mx+(-dy/l)*off,cy=my+(dx/l)*off;
+    const u=1-t,px=u*u*sx+2*u*t*cx+t*t*tx,py=u*u*sy+2*u*t*cy+t*t*ty;
+    txC.shadowColor=ep.color+"0.6)";txC.shadowBlur=6;
+    txC.beginPath();txC.fillStyle=ep.color+(.45+Math.random()*.4)+")";
+    txC.arc(px,py,ep.r,0,Math.PI*2);txC.fill();
+  }
+  txC.shadowBlur=0;
+  txC.globalCompositeOperation="source-over";
+  txC.restore();
+};
+
+/* ── node Fourier texture with additive blending + shadowBlur ── */
+const drawTex=(n,ts)=>{
+  if(typeof n.x!=="number")return;
+  const R=nr(n)-2,x=n.x,y=n.y;
+  txC.save();
+  txC.beginPath();txC.arc(x,y,R,0,Math.PI*2);txC.clip();
+  txC.globalCompositeOperation="lighter";
+
+  const int=.4+n.decay*.6;
+  const bH=n.status==="predicted"?272:n.status==="mutation"?0:n.status==="active"?155:200;
+  const glowColor=n.status==="predicted"?"rgba(180,130,255,":"rgba("+(n.status==="mutation"?"255,80,80,":n.status==="active"?"80,255,180,":"140,140,140,");
+
+  for(let b=0;b<6;b++){
+    txC.beginPath();
+    txC.lineWidth=5-b*.55;
+    txC.shadowColor=`hsla(${bH+b*6},90%,65%,.6)`;
+    txC.shadowBlur=10+b*2;
+    const hue=bH+b*6;
+    txC.strokeStyle=`hsla(${hue},85%,${52+b*8}%,${.35+int*.45})`;
+    const f=.11+b*.065,am=6+b*4.5,v=.0045+b*.0015,ph=b*1.6;
+    for(let i=-R;i<=R;i+=.8){
+      const px=x+i;
+      const py=y+Math.sin(i*f+ts*v+ph)*am*int+(b-2.5)*4;
+      if(i===-R)txC.moveTo(px,py);else txC.lineTo(px,py);
+    }
+    txC.stroke();
+  }
+
+  txC.shadowBlur=0;
+  txC.globalCompositeOperation="source-over";
+  txC.restore();
+};
+
+const drawNodeHalo=(n)=>{
+  if(typeof n.x!=="number"||n.status==="fading")return;
+  const R=nr(n);
+  const haloR=R*2.6;
+  const col=n.status==="mutation"?"255,60,60":n.status==="predicted"?"170,120,255":n.status==="active"?"60,255,170":"160,160,160";
+  const g=txC.createRadialGradient(n.x,n.y,R*.3,n.x,n.y,haloR);
+  g.addColorStop(0,`rgba(${col},${.3*n.decay})`);
+  g.addColorStop(.4,`rgba(${col},${.12*n.decay})`);
+  g.addColorStop(1,`rgba(${col},0)`);
+  txC.beginPath();txC.fillStyle=g;
+  txC.arc(n.x,n.y,haloR,0,Math.PI*2);txC.fill();
+};
+
+const drawTextures=ts=>{
+  txC.clearRect(0,0,W,H);
+  txC.globalCompositeOperation="lighter";
+  nodes.forEach(n=>drawNodeHalo(n));
+  txC.globalCompositeOperation="source-over";
+  drawEdgeParticles();
+  nodes.forEach(n=>{
+    if(n.decay>.08)drawTex(n,ts);
+  });
+};
+
+/* ── time scrub ── */
+const scr=document.getElementById("timeScrubber"),tInd=document.getElementById("tInd");
+const applyScrub=t01=>{
+  const labels=["3 MONTHS AGO","2 MONTHS AGO","1 MONTH AGO","2 WEEKS AGO","1 WEEK AGO","3 DAYS AGO","YESTERDAY","NOW","PREDICTED","FUTURE"];
+  const li=Math.min(labels.length-1,Math.floor(t01*labels.length));
+  if(tInd){tInd.textContent=labels[li];tInd.style.left=`${t01*100}%`;}
+  const hs=document.getElementById("hudS");if(hs)hs.textContent=t01<.9?"REPLAY":"ACTIVE ANALYSIS";
+  let ac=0,mc=0;
+  nodes.forEach(n=>{
+    const nts=n.timestamp!=null?n.timestamp:n._oD;
+    if(nts>t01+.08){
+      n.decay=.02;
+      n.status="fading";
+    }else{
+      const age=Math.max(0,t01-nts);
+      n.decay=Math.max(.05,Math.exp(-3.5*age));
+      n.status=n._oS;
+      if(n._oS==="predicted"&&nts>t01)n.decay=Math.max(.15,1-(nts-t01)*6);
+      if(n._oS==="active"&&n.decay<.20)n.status="fading";
+    }
+    if(n.status==="active")ac++;
+    if(n.status==="mutation")mc++;
+  });
+  links.forEach(l=>{
+    const lts=l.timestamp!=null?l.timestamp:Math.max(
+      nodes.find(n=>n.id===(l.source.id||l.source))?.timestamp??0,
+      nodes.find(n=>n.id===(l.target.id||l.target))?.timestamp??0);
+    l._visible=lts<=t01+.08;
+  });
+  const dc=document.getElementById("dpC"),dm=document.getElementById("dpM"),da=document.getElementById("dpA");
+  if(dc)dc.textContent=nodes.filter(n=>n.decay>.08).length;
+  if(dm)dm.textContent=mc>0?`YES (${mc})`:"NO";
+  if(da)da.textContent=ac;
+  applyStyles();
+  linkSel.attr("stroke-opacity",d=>d._visible?(.2+d.probability*.72):.03)
+    .attr("stroke-width",d=>d._visible?(1.2+d.probability*9):.3);
+  badgeG.attr("opacity",d=>d._visible?.95:0);
+  sim.alpha(.08).restart();
+};
+if(scr)scr.addEventListener("input",()=>applyScrub(scr.value/100));
+applyScrub(.75);
+
+/* ── render loop ── */
+const loop=ts=>{drawBg(ts);drawTextures(ts);requestAnimationFrame(loop);};
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
