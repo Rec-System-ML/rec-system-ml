@@ -1,44 +1,44 @@
-# KuaiRand-1K 推荐系统可视化平台
+# KuaiRand-1K Recommendation System Dashboard
 
-基于 KuaiRand-1K 数据集构建的冷启动 + 兴趣演化推荐系统，含完整后端 API 与交互式前端 Dashboard。
-
----
-
-## 功能模块
-
-| 模块 | 说明 |
-|------|------|
-| **Overview Dashboard** | KPI 统计、CTR 信号对比、三版本模型指标对比（Baseline / +ItemKNN / +XGBoost） |
-| **User Profile** | 用户活跃度、历史兴趣 Tag 分布（环形图）、KNN 邻域散点 |
-| **Live Simulate** | 新用户冷启动（Popularity → KNN 渐进个性化）+ 老用户实时重排 |
-| **Interest Evolution** | D3.js 力导向图 · Markov 转移概率 · 时间衰减 |
+A recommendation system built on the KuaiRand-1K dataset, covering three modules: cold-start personalization, real-time re-ranking for returning users, and interest graph evolution. Includes a complete backend API and an interactive frontend dashboard.
 
 ---
 
-## 技术栈
+## Modules
 
-**后端**
-- FastAPI + Uvicorn（端口 8100）
-- ItemKNN 协同过滤 + XGBoost CTR 预测（混合打分 0.4:0.6）
-- 时间衰减重排（`w(t) = exp(-λΔt)`）
-
-**前端**
-- 纯 HTML / CSS / JS（无框架依赖）
-- D3.js v7 力导向图
-- Chart.js 统计图表
-- Bootstrap 5 布局
+| Module | Description |
+|--------|-------------|
+| **Overview Dashboard** | KPI stats, CTR signal comparison, three-version model metrics (Baseline / +ItemKNN / +XGBoost) |
+| **User Profile** | User activity, historical interest tag distribution (donut chart), KNN neighbor positioning |
+| **Live Simulate** | New-user cold-start (four-phase progressive personalization) + returning-user real-time re-ranking |
+| **Interest Graph** | D3.js force-directed graph showing Markov transitions and time-decay evolution of user interest nodes |
 
 ---
 
-## 数据集
+## Tech Stack
 
-使用 [KuaiRand-1K](https://kuairand.com/) 数据集，需自行下载并放置到 `KuaiRand-1K/data/`：
+**Backend**
+- FastAPI + Uvicorn (port 8100)
+- ItemKNN collaborative filtering + XGBoost CTR prediction (blended score 0.4:0.6)
+- Time-decay re-ranking (`w(t) = exp(-λΔt)`)
+- K-Means user clustering for cold-start cluster matching (K=6)
+
+**Frontend**
+- Pure HTML / CSS / JS (no framework dependencies)
+- D3.js v7 force-directed graph
+- Chart.js for statistical charts
+
+---
+
+## Dataset
+
+Uses the [KuaiRand-1K](https://kuairand.com/) dataset. Download it manually and place it under `KuaiRand-1K/data/`:
 
 ```
 KuaiRand-1K/data/
-├── log_standard_4_08_to_4_21_1k.csv   # Phase1 训练日志
-├── log_standard_4_22_to_5_08_1k.csv   # Phase2 训练日志
-├── log_random_4_22_to_5_08_1k.csv     # 随机曝光（去偏评估）
+├── log_standard_4_08_to_4_21_1k.csv   # Phase 1 training log
+├── log_standard_4_22_to_5_08_1k.csv   # Phase 2 training log
+├── log_random_4_22_to_5_08_1k.csv     # Random exposure (de-bias evaluation)
 ├── user_features_1k.csv
 ├── video_features_basic_1k.csv
 └── video_features_statistic_1k.csv
@@ -46,97 +46,106 @@ KuaiRand-1K/data/
 
 ---
 
-## 快速开始
+## Quick Start
 
-### 1. 安装依赖
+### 1. Install dependencies
 
 ```bash
 cd back
 pip install -r requirements.txt
 ```
 
-### 2. 启动后端
+### 2. Start the backend
 
 ```bash
 cd back
 python api.py
 ```
 
-访问 [http://localhost:8100](http://localhost:8100) 即可打开前端 Dashboard。
-API 文档：[http://localhost:8100/docs](http://localhost:8100/docs)
+Open the dashboard at [http://localhost:8100](http://localhost:8100).
+API docs: [http://localhost:8100/docs](http://localhost:8100/docs)
 
-> **已附带预训练模型**（`back/checkpoints/mvp_artifact.joblib`，55MB），可直接启动，无需重新训练。
+> **Pre-trained model included** (`back/checkpoints/mvp_artifact.joblib`). You can start directly without retraining.
 
-### 3. （可选）重新训练模型
+### 3. (Optional) Retrain the model
 
 ```bash
 cd back
 python train.py --data-dir ../KuaiRand-1K/data --rows 250000
 ```
 
-训练 ItemKNN + XGBoost 并将 artifact 保存到 `back/checkpoints/mvp_artifact.joblib`，约需 30 分钟。
-
-### 4. （可选）重新生成兴趣演化数据
-
-```bash
-python ui_prototype/gen_interest_data.py
-```
-
-> 输出 `ui_prototype/interest_evolution_data.js`，已含预生成版本，可跳过。
+Trains ItemKNN + XGBoost and saves the artifact to `back/checkpoints/mvp_artifact.joblib`.
 
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 .
 ├── back/
-│   ├── api.py                   # FastAPI 服务入口（含静态文件挂载）
-│   ├── train.py                 # 模型训练脚本
+│   ├── api.py                   # FastAPI entry point (with static file mount)
+│   ├── train.py                 # Model training script
+│   ├── reranker.py              # Compatibility shim for joblib deserialization
 │   ├── checkpoints/
-│   │   └── mvp_artifact.joblib  # 预训练模型（55MB）
+│   │   └── mvp_artifact.joblib  # Pre-trained model artifact
 │   ├── artifacts/
-│   │   └── metrics.json         # 各模型评估指标
+│   │   └── metrics.json         # Per-model evaluation metrics
 │   ├── models/
-│   │   ├── item_knn.py          # ItemKNN 协同过滤
-│   │   ├── xgboost_ctr.py       # XGBoost CTR 模型
-│   │   └── reranker.py          # 时间衰减重排器
+│   │   ├── item_knn.py          # ItemKNN collaborative filtering
+│   │   ├── xgboost_ctr.py       # XGBoost CTR model
+│   │   └── reranker.py          # Time-decay re-ranker
 │   ├── routers/
-│   │   ├── user.py              # 用户画像 API
-│   │   ├── recommend.py         # 推荐 & 实时重排 API
-│   │   ├── cold_start.py        # 冷启动 API
-│   │   └── stats.py             # 统计 & 指标 API
+│   │   ├── stats.py             # Stats & metrics API
+│   │   ├── user.py              # User profile API
+│   │   ├── recommend.py         # Recommendation & real-time re-ranking API
+│   │   ├── cold_start.py        # Cold-start API (four-phase progressive strategy)
+│   │   └── interest_graph.py    # Interest graph API
 │   └── utils/
-│       ├── loader.py            # artifact 加载
-│       ├── pipeline.py          # 数据读取与清洗
-│       ├── evaluation.py        # 评估指标计算
-│       └── tags.py              # Tag ID → 名称映射
+│       ├── loader.py            # Artifact loading & K-Means cluster pre-computation
+│       ├── graph_builder.py     # Interest graph construction (time-decay + Markov transitions)
+│       ├── pipeline.py          # Data loading and preprocessing
+│       ├── evaluation.py        # Evaluation metric computation
+│       └── tags.py              # Tag ID → display name mapping
 ├── ui_prototype/
-│   ├── index.html               # 主 Dashboard（HTML 结构）
-│   ├── style.css                # 全局样式
-│   ├── app.js                   # 交互逻辑 & Chart.js 图表
-│   ├── interest_evolution.html  # 兴趣演化全屏可视化
-│   ├── interest_evolution_data.js  # 预生成用户演化数据
-│   └── gen_interest_data.py     # 演化数据生成脚本
-├── KuaiRand-1K/                 # 数据集目录（data/ 需自行下载）
-└── PROJECT_DESIGN.md            # 详细设计文档
+│   ├── index.html               # Main dashboard
+│   ├── style.css                # Global styles
+│   └── app.js                   # Interaction logic & charts
+└── KuaiRand-1K/                 # Dataset directory (download data/ manually)
 ```
 
 ---
 
-## 主要 API 端点
+## API Endpoints
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/stats` | 模型评估指标（AUC、NDCG@10 等） |
-| GET | `/api/users` | 可用用户列表 |
-| GET | `/api/user/{id}/profile` | 用户画像（Tag 分布、活跃度） |
-| GET | `/api/popular` | 全站热门 Top-N |
-| POST | `/api/recommend/realtime` | 老用户实时重排推荐 |
-| POST | `/api/cold-start/recommend` | 冷启动推荐（含 alpha 渐进演化） |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET  | `/api/stats` | Model evaluation metrics (AUC, NDCG@10, etc.) |
+| GET  | `/api/users` | Available user list |
+| GET  | `/api/user/{id}/profile` | User profile (tag distribution, activity) |
+| GET  | `/api/popular` | Global popular videos, Top-N |
+| POST | `/api/recommend` | Returning-user recommendation (ItemKNN + XGBoost blend) |
+| POST | `/api/recommend/realtime` | Returning-user real-time re-ranking (with session clicks) |
+| POST | `/api/cold-start/recommend` | New-user cold-start recommendation (four-phase progressive) |
+| GET  | `/api/interest-graph/{user_id}` | User interest evolution graph data |
+| GET  | `/api/interest-graph/demo` | Built-in demo graph (no data required) |
+
+---
+
+## Cold-Start Strategy
+
+New-user cold-start uses a four-phase progressive strategy, gradually increasing personalization as clicks accumulate:
+
+| Phase | Clicks | Strategy |
+|-------|--------|----------|
+| Phase 0 | 0 | Pure global popularity fallback |
+| Phase 1 | 1–7 | Popular × (1−eff_conf) + Cluster × eff_conf; confidence grows linearly with clicks |
+| Phase 2 | 8–19 | Cluster candidates dominate; KNN weight linearly ramps from 0% to 40% |
+| Phase 3 | 20+ | Cluster ∪ KNN neighbor candidate fusion; KNN weight continues ramping to 60% |
+
+Clusters are built via K-Means (K=6) on existing-user tag profiles. After the new user clicks, their tag vector is compared to cluster centroids using cosine similarity for assignment.
 
 ---
 
 ## Dataset License
 
-KuaiRand-1K 数据集遵循其原始许可协议，详见 `KuaiRand-1K/LICENSE`。
+KuaiRand-1K is subject to its original license. See `KuaiRand-1K/LICENSE`.

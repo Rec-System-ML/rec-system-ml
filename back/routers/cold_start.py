@@ -1,17 +1,19 @@
 """
-routers/cold_start.py  —  B组冷启动模块
-=========================================
+routers/cold_start.py  —  cold-start module
+=============================================
 
-冷启动三阶段（按 n_clicks 渐进切换）：
-  阶段0  n_clicks = 0       纯热门（全局点击数排名）
-  阶段1  1 ≤ n_clicks ≤ 9  热门 × (1-α) + 虚拟KNN × α
-  阶段2  n_clicks ≥ 10      切换至 A 组训练好的 ItemKNN+XGBoost 混合模型
+Four-phase progressive cold-start (fully deterministic, no random sampling):
 
-  α = n_clicks / 10   （0.0 → 1.0，匀速增长）
-  进度百分比 = α × 100%
+  Phase 0  clicks = 0          Pure global popularity fallback
+  Phase 1  1 ≤ clicks ≤ 7     Cluster confidence weighting: Pop×(1-conf) + Cluster×conf
+  Phase 2  8 ≤ clicks ≤ 19    Cluster dominates: 0.6×Cluster + 0.4×KNN
+  Phase 3  clicks ≥ 20        Deep fusion: 0.4×Cluster + 0.6×KNN neighbors
 
-"新用户"：前端杜撰的虚拟用户（无历史），发送 clicked_videos 列表跟踪行为。
-"老用户"：已有完整历史，直接走 A 组训练模型（见 recommend.py）。
+Design notes:
+  - Phase 1: low early confidence → results near popularity, smoothly sliding toward Cluster as clicks grow
+  - Phase 2: candidates come from the nearest K-Means cluster, diverging from global popularity
+  - Phase 3: retains cluster assignment + KNN neighbor fusion for strong explainability
+  - Same input always produces same output, convenient for demo reproducibility
 
 POST /api/cold-start/recommend
 """
@@ -21,79 +23,200 @@ import numpy as np
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from core.loader import (
+from utils.loader import (
     get_video_tags, tag_name,
-    get_popular_candidates, knn_score_from_history,
+    get_popular_candidates,
+    get_cluster_candidates,
+    knn_candidates_from_history,
+    knn_score_from_history,
 )
 
 router = APIRouter()
 
-PHASE_THRESHOLD = 10   # 点击数达到此值切换至完整模型
+CLUSTER_THRESHOLD = 8    # Phase 2 起始点击数
+PHASE3_THRESHOLD  = 20   # Phase 3 起始点击数
 
-
-# ── 请求 / 响应 ──────────────────────────────────────────────────────────────
 
 class ColdStartRequest(BaseModel):
-    clicked_videos: list[int] = Field(default_factory=list,
-                                      description="新用户已点击的视频 ID 列表")
+    clicked_videos: list[int] = Field(default_factory=list)
     top_k: int = Field(default=10, ge=1, le=50)
 
 
-# ── 核心逻辑 ─────────────────────────────────────────────────────────────────
+def _phase0(top_k: int) -> list[dict]:
+    """Phase 0: pure popularity, no personalization."""
+    candidates = get_popular_candidates(n=top_k * 3)
+    results = []
+    for rank, vid in enumerate(candidates[:top_k]):
+        pop_score = 1.0 - rank / (top_k * 3)
+        results.append({
+            "video_id": vid,
+            "score": round(pop_score, 4),
+            "pop_score": round(pop_score, 4),
+            "knn_score": 0.0,
+            "tag_boost": 0.0,
+            "cluster_score": 0.0,
+            "tags": [tag_name(t) for t in get_video_tags(vid)[:3]],
+            "phase": 0,
+        })
+    return results
 
-def _calc_alpha(n_clicks: int) -> float:
-    return min(n_clicks / PHASE_THRESHOLD, 1.0)
 
+def _phase1(clicked_videos: list[int], n_clicks: int, top_k: int) -> tuple[list[dict], int, float]:
+    """
+    Phase 1: cluster confidence-weighted blend.
+    score = (1 - eff_conf) × pop_score + eff_conf × cluster_score
 
-def _recommend_phase0_1(clicked_videos: list[int], alpha: float, top_k: int) -> list[dict]:
-    """阶段0/1：热门兜底 + 虚拟KNN（基于 clicked_videos）。"""
+    eff_conf = confidence × (n_clicks / CLUSTER_THRESHOLD)
+    - Scales down cluster weight at low click counts to prevent over-trusting a single click
+    - 1 click:  eff_conf = conf × 0.125 → mostly popularity
+    - 7 clicks: eff_conf = conf × 0.875 → mostly cluster
+    """
     seen = set(clicked_videos)
-    candidates = get_popular_candidates(n=600, exclude=seen)
+    cluster_cands, cluster_id, confidence = get_cluster_candidates(
+        clicked_videos, n=300, exclude=seen
+    )
+    # Scale cluster weight by click progress to avoid jumping to cluster on 1 click
+    confidence = confidence * (n_clicks / CLUSTER_THRESHOLD)
+    pop_cands = get_popular_candidates(n=300, exclude=seen | set(cluster_cands))
+
+    merged = list(dict.fromkeys(cluster_cands + pop_cands))
+
+    cluster_rank = {vid: i for i, vid in enumerate(cluster_cands)}
+    pop_rank_map = {vid: i for i, vid in enumerate(pop_cands)}
+    max_cluster = len(cluster_cands) or 1
+    max_pop     = len(pop_cands) or 1
 
     results = []
-    max_pop = len(candidates) or 1
-    for rank, vid in enumerate(candidates):
-        pop_score = 1.0 - rank / max_pop          # 热门得分（排名越靠前越高）
-        knn_s = knn_score_from_history(clicked_videos, vid) if clicked_videos else 0.0
-        # sigmoid 归一化 KNN 分
-        knn_norm = float(1.0 / (1.0 + np.exp(-knn_s))) if knn_s > 0 else 0.0
-        score = (1 - alpha) * pop_score + alpha * knn_norm
+    for vid in merged:
+        c_rank      = cluster_rank.get(vid, max_cluster)
+        cluster_scr = 1.0 - c_rank / max_cluster
+
+        p_rank    = pop_rank_map.get(vid, max_pop)
+        pop_scr   = 1.0 - p_rank / max_pop
+
+        score = (1 - confidence) * pop_scr + confidence * cluster_scr
         results.append({
             "video_id": vid,
             "score": round(score, 4),
-            "pop_score": round(pop_score, 4),
-            "knn_score": round(knn_norm, 4),
+            "pop_score": round(pop_scr, 4),
+            "knn_score": 0.0,
+            "tag_boost": 0.0,
+            "cluster_score": round(cluster_scr, 4),
             "tags": [tag_name(t) for t in get_video_tags(vid)[:3]],
-            "phase": 0 if alpha == 0 else 1,
+            "phase": 1,
         })
-
     results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:top_k]
+    return results[:top_k], cluster_id, confidence
 
 
+def _phase2(clicked_videos: list[int], n_clicks: int, top_k: int) -> tuple[list[dict], int, float]:
+    """
+    Phase 2: cluster candidates with KNN weight linearly ramping 0 → 0.4.
+    click 8  → knn_w=0.0, pure cluster (smooth handoff from Phase 1)
+    click 19 → knn_w=0.4, Cluster 60% + KNN 40%
+    """
+    seen = set(clicked_videos)
+    candidates, cluster_id, confidence = get_cluster_candidates(
+        clicked_videos, n=250, exclude=seen
+    )
 
-# ── 端点 ─────────────────────────────────────────────────────────────────────
+    t     = (n_clicks - CLUSTER_THRESHOLD) / (PHASE3_THRESHOLD - CLUSTER_THRESHOLD)
+    knn_w = 0.4 * t   # 0.0 → 0.4
+
+    results = []
+    max_rank = len(candidates) or 1
+    for rank, vid in enumerate(candidates):
+        cluster_score = 1.0 - rank / max_rank
+        knn_s    = knn_score_from_history(clicked_videos, vid)
+        knn_norm = float(1.0 / (1.0 + np.exp(-knn_s))) if knn_s > 0 else 0.0
+        score = (1 - knn_w) * cluster_score + knn_w * knn_norm
+        results.append({
+            "video_id": vid,
+            "score": round(score, 4),
+            "pop_score": 0.0,
+            "knn_score": round(knn_norm, 4),
+            "tag_boost": 0.0,
+            "cluster_score": round(cluster_score, 4),
+            "tags": [tag_name(t) for t in get_video_tags(vid)[:3]],
+            "phase": 2,
+        })
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return results[:top_k], cluster_id, confidence
+
+
+def _phase3(clicked_videos: list[int], n_clicks: int, top_k: int) -> tuple[list[dict], int, float]:
+    """
+    Phase 3: Cluster ∪ KNN neighbor candidates; KNN weight ramps 0.4 → 0.6.
+    click 20 → knn_w=0.40 (smooth handoff from Phase 2)
+    click 30 → knn_w=0.60 (cap)
+    """
+    seen = set(clicked_videos)
+
+    cluster_cands, cluster_id, confidence = get_cluster_candidates(
+        clicked_videos, n=200, exclude=seen
+    )
+    knn_cands = knn_candidates_from_history(clicked_videos, n=200, exclude=seen)
+    merged = list(dict.fromkeys(cluster_cands + knn_cands))
+    if len(merged) < top_k:
+        extra = get_popular_candidates(n=top_k * 2, exclude=seen | set(merged))
+        merged = merged + extra
+
+    t3    = min(1.0, (n_clicks - PHASE3_THRESHOLD) / 10)
+    knn_w = 0.4 + 0.2 * t3   # 0.4 → 0.6
+
+    cluster_rank = {vid: i for i, vid in enumerate(cluster_cands)}
+    max_cluster  = len(cluster_cands) or 1
+
+    results = []
+    for vid in merged:
+        c_rank        = cluster_rank.get(vid, max_cluster)
+        cluster_score = 1.0 - c_rank / max_cluster
+        knn_s    = knn_score_from_history(clicked_videos, vid)
+        knn_norm = float(1.0 / (1.0 + np.exp(-knn_s))) if knn_s > 0 else 0.0
+        score = (1 - knn_w) * cluster_score + knn_w * knn_norm
+        results.append({
+            "video_id": vid,
+            "score": round(score, 4),
+            "pop_score": 0.0,
+            "knn_score": round(knn_norm, 4),
+            "tag_boost": 0.0,
+            "cluster_score": round(cluster_score, 4),
+            "tags": [tag_name(t) for t in get_video_tags(vid)[:3]],
+            "phase": 3,
+        })
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return results[:top_k], cluster_id, confidence
+
 
 @router.post("/cold-start/recommend")
 def cold_start_recommend(req: ColdStartRequest):
-    n_clicks = len(req.clicked_videos)
-    alpha = _calc_alpha(n_clicks)
-    progress_pct = round(alpha, 4)
-
-    # 所有阶段统一走 phase0/1 逻辑，阶段2只是 alpha 固定为 1.0
-    results = _recommend_phase0_1(req.clicked_videos, alpha, req.top_k)
+    n_clicks   = len(req.clicked_videos)
+    cluster_id = -1
+    confidence = 0.0
 
     if n_clicks == 0:
-        phase_label = "阶段0 · 热门兜底"
-    elif n_clicks < PHASE_THRESHOLD:
-        phase_label = f"阶段1 · 冷启动混合 (α={alpha:.2f})"
+        results    = _phase0(req.top_k)
+        phase_label = "Phase 0 · Popularity Fallback"
+
+    elif n_clicks < CLUSTER_THRESHOLD:
+        results, cluster_id, confidence = _phase1(req.clicked_videos, n_clicks, req.top_k)
+        phase_label = f"Phase 1 · Cluster #{cluster_id} (conf {confidence:.0%})"
+
+    elif n_clicks < PHASE3_THRESHOLD:
+        results, cluster_id, confidence = _phase2(req.clicked_videos, n_clicks, req.top_k)
+        phase_label = f"Phase 2 · Cluster #{cluster_id} (conf {confidence:.0%})"
+
     else:
-        phase_label = "阶段2 · 纯个性化KNN"
+        results, cluster_id, confidence = _phase3(req.clicked_videos, n_clicks, req.top_k)
+        phase_label = f"Phase 3 · Cluster #{cluster_id} + KNN Fusion"
+
+    progress_pct = round(min(n_clicks / PHASE3_THRESHOLD, 1.0), 4)
 
     return {
-        "n_clicks": n_clicks,
-        "alpha": round(alpha, 2),
+        "n_clicks":     n_clicks,
+        "cluster_id":   cluster_id,
+        "confidence":   round(confidence, 4),
         "progress_pct": progress_pct,
-        "phase_label": phase_label,
-        "results": results,
+        "phase_label":  phase_label,
+        "results":      results,
     }

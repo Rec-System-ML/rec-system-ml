@@ -1,9 +1,11 @@
 from .item_knn import ItemKNNConfig, ItemKNNRecommender
+from .reranker import TimeDecayReranker
 from .xgboost_ctr import CTRFeatureBuilder, CTRModel
 
 __all__ = [
-    "ItemKNNConfig",
-    "ItemKNNRecommender",
     "CTRFeatureBuilder",
     "CTRModel",
+    "ItemKNNConfig",
+    "ItemKNNRecommender",
+    "TimeDecayReranker",
 ]
