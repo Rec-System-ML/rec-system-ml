@@ -1,0 +1,706 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recommendation Dashboard</title>
+
+<!-- Bootstrap 5 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<!-- D3.js -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+<!-- Local styles -->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════ -->
+<aside class="sidebar">
+  <!-- Logo -->
+  <div class="sidebar-logo">
+    <div>
+      <div class="logo-name">Recommendation</div>
+      <div class="logo-sub">DASHBOARD</div>
+    </div>
+  </div>
+
+  <!-- Profile block -->
+  <div class="sidebar-profile">
+
+    <div>
+      <div class="profile-name">KuaiRand-1K</div>
+      <div class="profile-role">KuaiRand-1K Dataset</div>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <div class="nav-section">Navigation</div>
+
+  <div class="nav-link-item active" id="nav-dashboard" onclick="goto('dashboard',this)">
+    <i class="bi bi-grid-1x2-fill nav-icon"></i>
+    Dashboard
+    <span class="nav-badge status-badge green ms-auto" style="font-size:9px;padding:2px 7px">Ready</span>
+  </div>
+
+  <div class="nav-section">Modules</div>
+
+  <div class="nav-link-item" id="nav-profile" onclick="goto('profile',this)">
+    <i class="bi bi-person-badge nav-icon"></i>
+    User Profile
+    <span class="nav-badge" style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(56,189,248,.1);color:var(--cyan);border-radius:10px">A</span>
+  </div>
+  <div class="nav-link-item" id="nav-simulate" onclick="goto('simulate',this)">
+    <i class="bi bi-lightning-charge-fill nav-icon"></i>
+    Live Simulate
+    <span class="nav-badge" style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(91,79,232,.15);color:var(--accent2);border-radius:10px">B</span>
+  </div>
+  <div class="nav-link-item" id="nav-interest-graph" onclick="goto('interest-graph',this)">
+    <i class="bi bi-diagram-3-fill nav-icon"></i>
+    Interest Graph
+    <span class="nav-badge" style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(192,122,255,.15);color:#c07aff;border-radius:10px">C</span>
+  </div>
+
+  <div class="nav-section mt-2">System</div>
+  <div class="nav-link-item" style="cursor:default;opacity:.6">
+    <i class="bi bi-bar-chart-fill nav-icon"></i>
+    Metrics
+  </div>
+  <div class="nav-link-item" style="cursor:default;opacity:.6">
+    <i class="bi bi-gear-fill nav-icon"></i>
+    Settings
+  </div>
+
+  <div class="sidebar-footer">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);display:inline-block"></span>
+      Pipeline Running
+    </div>
+    KuaiRand-1K · v1.0 · 2022<br>
+    Cold-Start Rec-Sys
+  </div>
+</aside>
+
+<!-- ══════════════════════════════════════
+     TOPBAR
+══════════════════════════════════════ -->
+<nav class="topbar">
+  <div class="topbar-breadcrumb">
+    <i class="bi bi-house-fill" style="font-size:13px"></i>
+    <span class="sep">/</span>
+    <span id="topbar-page" class="current">Dashboard</span>
+  </div>
+  <div class="topbar-right">
+    <div class="topbar-btn" title="Refresh">
+      <i class="bi bi-arrow-clockwise"></i>
+    </div>
+    <div class="topbar-btn" title="Notifications">
+      <i class="bi bi-bell-fill"></i>
+    </div>
+    <div class="topbar-btn" title="Fullscreen">
+      <i class="bi bi-fullscreen"></i>
+    </div>
+    <div class="topbar-user">
+      <div class="topbar-avatar">A</div>
+      <span style="font-size:12px;color:var(--text)">Admin</span>
+      <i class="bi bi-chevron-down" style="font-size:10px;color:var(--muted)"></i>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════
+     MAIN CONTENT
+══════════════════════════════════════ -->
+<div class="main-content">
+<div class="page-content">
+
+
+<!-- ═══════════ DASHBOARD PAGE ═══════════ -->
+<div class="page active" id="page-dashboard">
+
+  <!-- Header -->
+  <div class="pg-header">
+    <div>
+      <div class="pg-title">Overview Dashboard</div>
+      <div class="pg-sub"><i class="bi bi-calendar3 me-1"></i>Data Range: 2022/04/08 – 2022/05/08 · KuaiRand-1K</div>
+    </div>
+    <span class="status-badge green"><i class="bi bi-circle-fill me-1" style="font-size:7px"></i>Data Ready</span>
+  </div>
+
+  <!-- KPI row -->
+  <div class="row g-3 mb-4">
+    <div class="col-xl-3 col-sm-6">
+      <div class="kpi-tile t-purple">
+        <div class="kpi-icon-wrap"><i class="bi bi-people-fill" style="color:var(--accent)"></i></div>
+        <div class="kpi-label">Total Users</div>
+        <div class="kpi-value" id="kpi-users">1,000</div>
+        <div class="kpi-sub">
+          <span class="kpi-trend up"><i class="bi bi-arrow-up-short"></i>64%</span>
+          full_active users
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-3 col-sm-6">
+      <div class="kpi-tile t-teal">
+        <div class="kpi-icon-wrap"><i class="bi bi-camera-video-fill" style="color:var(--green)"></i></div>
+        <div class="kpi-label">Total Videos</div>
+        <div class="kpi-value" id="kpi-videos">4.37M</div>
+        <div class="kpi-sub">
+          <i class="bi bi-tag-fill" style="color:var(--green)"></i>
+          Avg 1.23 Tag/video
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-3 col-sm-6">
+      <div class="kpi-tile t-orange">
+        <div class="kpi-icon-wrap"><i class="bi bi-graph-up-arrow" style="color:var(--orange)"></i></div>
+        <div class="kpi-label">Training Interactions</div>
+        <div class="kpi-value" id="kpi-interact">11.7M</div>
+        <div class="kpi-sub">
+          <i class="bi bi-layers-fill" style="color:var(--orange)"></i>
+          Standard Log Phase1 + Phase2
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-3 col-sm-6">
+      <div class="kpi-tile t-pink">
+        <div class="kpi-icon-wrap"><i class="bi bi-bullseye" style="color:var(--pink)"></i></div>
+        <div class="kpi-label">Unbiased Test Set</div>
+        <div class="kpi-value">43,028</div>
+        <div class="kpi-sub">
+          <i class="bi bi-shuffle" style="color:var(--pink)"></i>
+          Random Exposure is_rand=1
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts + Pipeline row -->
+  <div class="row g-3 mb-4">
+
+    <!-- Feedback chart -->
+    <div class="col-xl-8">
+      <div class="v-card h-100">
+        <div class="v-card-header">
+          <div class="v-card-title">
+            <i class="bi bi-bar-chart-line-fill icon" style="color:var(--accent)"></i>
+            Feedback Signal Comparison
+          </div>
+          <span style="font-size:11px;color:var(--muted)">Random Exp. vs Std Phase1 vs Std Phase2</span>
+        </div>
+        <div class="v-card-body">
+          <canvas id="feedbackChart" height="200"></canvas>
+        </div>
+        <div class="v-card-footer">
+          <i class="bi bi-info-circle me-1"></i>
+          Phase1→Phase2 CTR drops <strong>11.4pp</strong>, validating time-decay modeling · random log click=17.4% is unbiased baseline
+        </div>
+      </div>
+    </div>
+
+    <!-- Model Metrics -->
+    <div class="col-xl-4">
+      <div class="v-card h-100">
+        <div class="v-card-header">
+          <div class="v-card-title">
+            <i class="bi bi-graph-up icon" style="color:var(--green)"></i>
+            Model Metrics
+          </div>
+          <span style="font-size:11px;color:var(--muted)">Test Set · Blend Model</span>
+        </div>
+        <div class="v-card-body" style="display:flex;flex-direction:column;gap:14px;">
+
+          <!-- NDCG@10 -->
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+              <span style="font-size:12px;color:var(--muted)">NDCG@10
+                <span style="font-size:10px;margin-left:4px;color:#475569">Ranking Quality</span>
+              </span>
+              <span style="font-size:18px;font-weight:700;color:var(--green)" id="m-ndcg">0.7636</span>
+            </div>
+            <div style="height:5px;border-radius:4px;background:rgba(255,255,255,.07);">
+              <div id="m-ndcg-bar" style="width:76.4%;height:100%;border-radius:4px;background:linear-gradient(90deg,#01B574,#21AEF3);"></div>
+            </div>
+          </div>
+
+          <!-- AUC -->
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+              <span style="font-size:12px;color:var(--muted)">AUC
+                <span style="font-size:10px;margin-left:4px;color:#475569">Click Prediction</span>
+              </span>
+              <span style="font-size:18px;font-weight:700;color:var(--accent2)" id="m-auc">—</span>
+            </div>
+            <div style="height:5px;border-radius:4px;background:rgba(255,255,255,.07);">
+              <div id="m-auc-bar" style="width:0%;height:100%;border-radius:4px;background:linear-gradient(90deg,#4318FF,#868CFF);"></div>
+            </div>
+          </div>
+
+          <!-- Precision@10 & Recall@10 side by side -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:10px 12px;border:1px solid var(--border);">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:4px">Precision@10</div>
+              <div style="font-size:20px;font-weight:700;color:var(--cyan)" id="m-prec">—</div>
+            </div>
+            <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:10px 12px;border:1px solid var(--border);">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:4px">Recall@10</div>
+              <div style="font-size:20px;font-weight:700;color:var(--orange)" id="m-recall">0.0596</div>
+            </div>
+          </div>
+
+          <!-- Catalog Coverage -->
+          <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:10px 14px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:10px;color:var(--muted)">Catalog Coverage</div>
+              <div style="font-size:11px;color:#475569;margin-top:2px">Rec Diversity Coverage</div>
+            </div>
+            <div style="font-size:22px;font-weight:700;color:var(--pink)" id="m-cov">0.86%</div>
+          </div>
+
+        </div>
+        <div class="v-card-footer">
+          <i class="bi bi-info-circle me-1"></i>
+          ItemKNN × 0.4 + XGBoost CTR × 0.6 · time-decay reranking
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Model Version Comparison -->
+  <div class="row g-3 mb-4">
+    <div class="col-12">
+      <div class="v-card">
+        <div class="v-card-header">
+          <div class="v-card-title">
+            <i class="bi bi-layers-fill icon" style="color:var(--cyan)"></i>
+            Model Version Comparison
+          </div>
+          <span style="font-size:11px;color:var(--muted)">Baseline &rarr; +ItemKNN &rarr; +XGBoost Blend &middot; AUC &amp; Accuracy on test set</span>
+        </div>
+        <div class="v-card-body">
+          <canvas id="modelCompareChart" height="100"></canvas>
+        </div>
+        <div class="v-card-footer">
+          <i class="bi bi-info-circle me-1"></i>
+          AUC: Random(0.500) &rarr; +ItemKNN(0.502) &rarr; +XGBoost Blend(0.640) &nbsp;|&nbsp;
+          Accuracy: 17.4% &rarr; 31.8% &rarr; 67.9% &nbsp;|&nbsp;
+          <span style="color:var(--green)">XGBoost adds the most significant gain</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+</div><!-- /dashboard page -->
+
+
+<!-- ═══════════ User Profile PAGE ═══════════ -->
+<div class="page" id="page-profile">
+
+  <div class="pg-header">
+    <div>
+      <div class="pg-title">User Profile</div>
+      <div class="pg-sub">User feature analysis · KNN neighbor positioning · historical interest distribution</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <span style="font-size:12px;color:var(--muted)">Select User</span>
+      <select id="userSelect" onchange="updateProfile(this.value)" class="form-select form-select-sm"
+              style="background:var(--card-bg);border-color:var(--border);color:var(--text);width:auto">
+        <option value="42">User #42</option>
+        <option value="128">User #128</option>
+        <option value="307">User #307</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Stat tiles -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="user-stat-tile">
+        <div class="ust-val" id="u-follow" style="color:var(--accent2)">523</div>
+        <div class="ust-lbl"><i class="bi bi-person-plus me-1"></i>Following</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="user-stat-tile">
+        <div class="ust-val" id="u-fans" style="color:var(--green)">1,240</div>
+        <div class="ust-lbl"><i class="bi bi-people me-1"></i>Followers</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="user-stat-tile">
+        <div class="ust-val" id="u-days" style="color:var(--orange)">892</div>
+        <div class="ust-lbl"><i class="bi bi-calendar-check me-1"></i>Days Registered</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="user-stat-tile">
+        <div class="ust-val" id="u-active" style="color:var(--cyan)">full</div>
+        <div class="ust-lbl"><i class="bi bi-activity me-1"></i>Activity Level</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <!-- Tag Distribution -->
+    <div class="col-xl-7">
+      <div class="v-card h-100">
+        <div class="v-card-header">
+          <div class="v-card-title">
+            <i class="bi bi-tags-fill icon" style="color:var(--orange)"></i>
+            Historical Interest Tag Distribution
+          </div>
+          <span style="font-size:11px;color:var(--muted)">Weighted by long_view behavior</span>
+        </div>
+        <div class="v-card-body" style="display:flex;align-items:center;gap:32px;">
+          <!-- Left: donut + center label -->
+          <div style="position:relative;width:180px;height:180px;flex-shrink:0;">
+            <canvas id="tagChart" width="180" height="180"></canvas>
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
+              <div style="font-size:26px;font-weight:700;color:#fff;line-height:1.1" id="tagCenterVal">100</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Interest Tags</div>
+            </div>
+          </div>
+          <!-- Right: legend list -->
+          <div id="tagLegend" style="flex:1;display:flex;flex-direction:column;gap:12px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KNN Scatter -->
+    <div class="col-xl-5">
+      <div class="v-card h-100">
+        <div class="v-card-header">
+          <div class="v-card-title">
+            <i class="bi bi-diagram-2-fill icon" style="color:var(--pink)"></i>
+            KNN Neighbor Positioning
+          </div>
+          <span style="font-size:11px;color:var(--muted)">Demographic cosine similarity</span>
+        </div>
+        <div class="v-card-body">
+          <canvas id="knnChart" height="220"></canvas>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px">
+            <i class="bi bi-circle-fill me-1" style="color:var(--pink)"></i>Current User
+            <i class="bi bi-circle-fill ms-2 me-1" style="color:var(--accent)"></i>Nearest Neighbors (sim > 0.85)
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+</div><!-- /profile -->
+
+
+<!-- ═══════════ Live Simulate PAGE ═══════════ -->
+<div class="page" id="page-simulate">
+
+  <div class="pg-header">
+    <div>
+      <div class="pg-title">Live Simulate</div>
+      <div class="pg-sub">ItemKNN + XGBoost · rec list reranked after each click</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <select id="simUserSelect" onchange="onSimUserChange(this.value)" class="form-select form-select-sm"
+              style="background:var(--card-bg);border-color:var(--border);color:var(--text);width:auto">
+        <option value="42">User #42</option>
+      </select>
+      <button onclick="resetSim()" class="btn btn-sm"
+              style="background:var(--border);color:var(--text);border:none;border-radius:8px;padding:4px 14px;font-size:12px">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+      </button>
+      <span class="status-badge purple" id="simBadge"><i class="bi bi-circle-fill me-1" style="font-size:7px"></i>Loading</span>
+    </div>
+  </div>
+
+  <!-- Sub-tab switcher -->
+  <div class="d-flex gap-2 mb-3">
+    <button id="simTabBtn-new" onclick="switchSimTab('new')"
+            style="padding:6px 18px;border-radius:20px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer">
+      <i class="bi bi-person-plus-fill me-1"></i>New User Cold-Start
+    </button>
+    <button id="simTabBtn-old" onclick="switchSimTab('old')"
+            style="padding:6px 18px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer">
+      <i class="bi bi-person-check-fill me-1"></i>Old User Realtime Update
+    </button>
+  </div>
+
+  <!-- ── New User Cold-Start tab ── -->
+  <div id="simTab-new">
+    <!-- Progress bar -->
+    <div class="v-card mb-3">
+      <div class="v-card-body" style="padding:14px 20px">
+        <div class="d-flex align-items-center gap-3">
+          <i class="bi bi-thermometer-half" style="color:var(--accent);font-size:18px"></i>
+          <span style="font-size:12px;color:var(--muted);white-space:nowrap">Cold-Start Progress</span>
+          <div class="progress-bar-wrap"><div class="progress-fill" id="newProgressFill" style="width:0%"></div></div>
+          <span style="font-size:15px;font-weight:800;color:var(--accent);min-width:40px" id="newProgressText">0%</span>
+          <span id="newPhaseLabel" style="font-size:11px;color:var(--muted)">Phase 0 · Popularity Fallback</span>
+        </div>
+      </div>
+    </div>
+    <!-- Two columns -->
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="v-card h-100">
+          <div class="v-card-header">
+            <div class="v-card-title">
+              <i class="bi bi-fire icon" style="color:var(--orange)"></i>Site-wide Hot Top10
+            </div>
+            <span style="font-size:11px;color:var(--muted)">Fixed baseline · sorted by dataset click count</span>
+          </div>
+          <div class="v-card-body"><div class="video-list-scroll" id="newPopularList"></div></div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="v-card h-100" style="border-color:rgba(0,229,160,.3)">
+          <div class="v-card-header" style="border-color:rgba(0,229,160,.15)">
+            <div class="v-card-title">
+              <i class="bi bi-lightning-charge-fill icon" style="color:var(--accent)"></i>Cold-Start Rec
+            </div>
+            <span style="font-size:11px;color:var(--muted)">Click a video to trigger update</span>
+          </div>
+          <div class="v-card-body"><div class="video-list-scroll" id="newColdList"></div></div>
+        </div>
+      </div>
+    </div>
+    <!-- C: Click History -->
+    <div id="newClickHistory" class="mt-3" style="display:none">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+        <i class="bi bi-clock-history me-1"></i>Click History · each click drives personalization
+      </div>
+      <div id="newClickHistoryItems" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
+  </div>
+
+  <!-- ── Old User Realtime Update tab ── -->
+  <div id="simTab-old" style="display:none">
+    <!-- Click counter -->
+    <div class="v-card mb-3">
+      <div class="v-card-body" style="padding:14px 20px">
+        <div class="d-flex align-items-center gap-3">
+          <i class="bi bi-cursor-fill" style="color:var(--accent2);font-size:18px"></i>
+          <span style="font-size:12px;color:var(--muted);white-space:nowrap">Session Click Count</span>
+          <span id="oldClickCount" style="font-size:22px;font-weight:800;color:var(--accent2)">0</span>
+          <span style="font-size:11px;color:var(--muted)">· click videos on the right to refine personalization</span>
+        </div>
+      </div>
+    </div>
+    <!-- Two columns -->
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="v-card h-100">
+          <div class="v-card-header">
+            <div class="v-card-title">
+              <i class="bi bi-fire icon" style="color:var(--orange)"></i>Site-wide Hot Top10
+            </div>
+            <span style="font-size:11px;color:var(--muted)">Fixed baseline · sorted by dataset click count</span>
+          </div>
+          <div class="v-card-body"><div class="video-list-scroll" id="oldPopularList"></div></div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="v-card h-100" style="border-color:rgba(91,79,232,.4)">
+          <div class="v-card-header" style="border-color:rgba(91,79,232,.25)">
+            <div class="v-card-title">
+              <i class="bi bi-person-check-fill icon" style="color:var(--accent2)"></i>Personalized Rec
+            </div>
+            <span class="status-badge purple" style="font-size:9px;padding:2px 8px">Realtime Rerank</span>
+          </div>
+          <div class="v-card-body"><div class="video-list-scroll" id="oldPersonalList"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+</div><!-- /simulate -->
+
+
+
+<!-- ═══════════ Interest Graph PAGE ═══════════ -->
+<div class="page" id="page-interest-graph">
+
+  <div class="pg-header">
+    <div>
+      <div class="pg-title">Interest Graph</div>
+      <div class="pg-sub">User interest evolution · Time-decay encoding · Markov transition · Mutation detection</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <span style="font-size:12px;color:var(--muted)">Select User</span>
+      <select id="igUserSelect" onchange="onIgUserChange(this.value)"
+              class="form-select form-select-sm"
+              style="background:var(--card-bg);border-color:var(--border);color:var(--text);width:auto">
+        <option value="42">User #42</option>
+      </select>
+      <button onclick="generateIgGraph()" id="igGenBtn"
+              class="btn btn-sm"
+              style="background:rgba(192,122,255,.25);color:#c07aff;border:1px solid rgba(192,122,255,.4);
+                     border-radius:8px;padding:4px 16px;font-size:12px;font-weight:600">
+        <i class="bi bi-lightning-charge-fill me-1"></i>Generate Graph
+      </button>
+      <span class="status-badge purple" id="igBadge">
+        <i class="bi bi-circle-fill me-1" style="font-size:7px"></i>Ready
+      </span>
+    </div>
+  </div>
+
+  <!-- KPI row -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="kpi-tile" style="border-color:rgba(44,255,170,.15)">
+        <div class="kpi-icon-wrap" style="background:rgba(44,255,170,.1)">
+          <i class="bi bi-circle-fill" style="color:#2cffaa;font-size:18px"></i>
+        </div>
+        <div class="kpi-label">Active Interests</div>
+        <div class="kpi-value" id="ig-kpi-active" style="color:#2cffaa">—</div>
+        <div class="kpi-sub">recent high-engagement tags</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="kpi-tile" style="border-color:rgba(255,74,74,.15)">
+        <div class="kpi-icon-wrap" style="background:rgba(255,74,74,.1)">
+          <i class="bi bi-exclamation-triangle-fill" style="color:#ff4a4a;font-size:18px"></i>
+        </div>
+        <div class="kpi-label">Mutations Detected</div>
+        <div class="kpi-value" id="ig-kpi-mut" style="color:#ff4a4a">—</div>
+        <div class="kpi-sub">Z-test burst (Z&gt;2.0)</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="kpi-tile" style="border-color:rgba(192,122,255,.15)">
+        <div class="kpi-icon-wrap" style="background:rgba(192,122,255,.1)">
+          <i class="bi bi-stars" style="color:#c07aff;font-size:18px"></i>
+        </div>
+        <div class="kpi-label">Predicted Next</div>
+        <div class="kpi-value" id="ig-kpi-pred" style="color:#c07aff">—</div>
+        <div class="kpi-sub">co-occurrence predicted tags</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="kpi-tile" style="border-color:rgba(94,234,255,.15)">
+        <div class="kpi-icon-wrap" style="background:rgba(94,234,255,.1)">
+          <i class="bi bi-bezier2" style="color:#5eeaff;font-size:18px"></i>
+        </div>
+        <div class="kpi-label">Transitions (Edges)</div>
+        <div class="kpi-value" id="ig-kpi-edges" style="color:#5eeaff">—</div>
+        <div class="kpi-sub">Markov P(src→tgt)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content: Legend + Graph -->
+  <div class="row g-3">
+
+    <!-- Legend -->
+    <div class="col-xl-2 col-md-3">
+      <div class="v-card h-100">
+        <div class="v-card-header">
+          <div class="v-card-title">
+            <i class="bi bi-info-circle-fill icon" style="color:#c07aff"></i>
+            Legend
+          </div>
+        </div>
+        <div class="v-card-body" style="display:flex;flex-direction:column;gap:16px;padding:18px 16px">
+          <div style="display:flex;align-items:flex-start;gap:9px">
+            <span style="width:12px;height:12px;border-radius:50%;background:#2cffaa;box-shadow:0 0 8px #2cffaa;
+                         flex-shrink:0;margin-top:2px;display:inline-block"></span>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--text)">Active</div>
+              <div style="font-size:10px;color:var(--muted);line-height:1.5">Recent interest<br>ENG / CTR / WATCH</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:9px">
+            <span style="width:12px;height:12px;border-radius:50%;background:#808080;
+                         flex-shrink:0;margin-top:2px;display:inline-block"></span>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--text)">Fading</div>
+              <div style="font-size:10px;color:var(--muted);line-height:1.5">Old interest<br>λ=0.035 decay</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:9px">
+            <span style="width:12px;height:12px;background:#ff4a4a;box-shadow:0 0 8px #ff4a4a;
+                         flex-shrink:0;margin-top:2px;display:inline-block;
+                         clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--text)">Mutation ⚠</div>
+              <div style="font-size:10px;color:var(--muted);line-height:1.5">Z-test burst<br>Z&gt;2.0, rare hist.</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:9px">
+            <span style="width:12px;height:12px;border-radius:50%;background:#c07aff;box-shadow:0 0 8px #c07aff;
+                         flex-shrink:0;margin-top:2px;display:inline-block"></span>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--text)">Predicted</div>
+              <div style="font-size:10px;color:var(--muted);line-height:1.5">Co-occurrence<br>predicted next</div>
+            </div>
+          </div>
+          <hr style="border-color:var(--border);margin:0">
+          <div style="font-size:10px;color:var(--muted);line-height:1.9">
+            <i class="bi bi-circle me-1"></i><b style="color:var(--text)">Size</b> ∝ decay<br>
+            <i class="bi bi-arrow-left-right me-1"></i><b style="color:var(--text)">X-pos</b>: past→future<br>
+            <i class="bi bi-bezier me-1"></i><b style="color:var(--text)">Edge</b>: Markov P<br>
+            <i class="bi bi-hand-index me-1"></i><b style="color:var(--text)">Drag</b> to rearrange
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Graph canvas -->
+    <div class="col-xl-10 col-md-9">
+      <div class="v-card">
+        <div class="v-card-header">
+          <div class="v-card-title">
+            <i class="bi bi-diagram-3-fill icon" style="color:#c07aff"></i>
+            Interest Evolution Graph
+          </div>
+          <span style="font-size:11px;color:var(--muted)">
+            D3.js Force-directed &middot; Time-decay nodes &middot; Markov edges
+          </span>
+        </div>
+        <div class="v-card-body" style="padding:0">
+          <div id="igGraphContainer"
+               style="width:100%;min-height:700px;
+                      background:radial-gradient(ellipse at 50% -20%,rgba(40,110,255,.18),transparent 50%),
+                                 radial-gradient(ellipse at 8% 110%,rgba(110,60,255,.14),transparent 55%),#060a14;
+                      border-radius:0 0 14px 14px;overflow:hidden;position:relative;
+                      display:flex;align-items:center;justify-content:center">
+            <div id="igPlaceholder" style="text-align:center;color:var(--muted);pointer-events:none">
+              <i class="bi bi-diagram-3" style="font-size:52px;opacity:.2;display:block;margin-bottom:14px"></i>
+              <div style="font-size:13px;margin-bottom:6px">Select a user and click <strong style="color:#c07aff">Generate Graph</strong></div>
+              <div style="font-size:11px;opacity:.5">Builds interest evolution from KuaiRand interaction history</div>
+            </div>
+          </div>
+        </div>
+        <div class="v-card-footer">
+          <i class="bi bi-info-circle me-1"></i>
+          10-step algorithm: tag aggregation → exponential decay (λ=0.035, ~20d half-life) →
+          Z-test mutation detection (Z&gt;2.0) → co-occurrence prediction → 1st-order Markov transitions
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /interest-graph -->
+
+
+</div><!-- /page-content -->
+</div><!-- /main-content -->
+
+
+<!-- ══════════════════════════════════════
+     SCRIPTS
+══════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
